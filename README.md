@@ -24,12 +24,12 @@ La app presenta los datos con la estructura de **copa de martini** (Segel y Heer
 
 ## Cómo usar la app
 
-1. **Leé el tallo de arriba hacia abajo.** Los títulos solos cuentan la historia; si querés saber de dónde sale cada afirmación, abrí «Cómo lo sabemos».
-2. **En «Explorá»**, cada punto del mapa es un sismo, coloreado según lo que dijo el modelo: acierto con marca, falso negativo, falsa alarma, acierto sin marca o sin marca cargada. Filtrá por magnitud, resultado o región, hacé clic en la leyenda para resaltar un resultado y pasá el mouse por un punto para ver su detalle. Cada sismo lo predice un modelo que no lo vio.
+1. **Leé el tallo de arriba hacia abajo.** Los títulos solos cuentan la historia; si querés saber de dónde sale cada afirmación, abrí «Cómo lo sabemos». Todo el tallo se lee sin tocar nada: en «Los datos», cuántos sismos tienen la marca, los sismos en el tiempo y las columnas del dataset; en «Lo que encontramos», cómo cambia la marca con la magnitud y qué variables separan a los sismos con marca; en «El modelo», qué dio, en qué se apoya y las conclusiones.
+2. **En «Explorá»**, cada punto del mapa es un sismo, coloreado según lo que dijo el modelo: acierto con marca, falso negativo, falsa alarma, acierto sin marca o sin marca cargada. Arrastrá el mouse sobre el histograma de magnitud para elegir un rango (el mapa muestra sólo esos sismos), filtrá por resultado o región, hacé clic en la leyenda para resaltar un resultado y pasá el mouse por un punto para ver su detalle. Cada sismo lo predice un modelo que no lo vio.
 
    ![Sección «Explorá»: el mapa de sismos coloreado según lo que dijo el modelo](docs/img/explora.png)
 
-3. **En «Probá el modelo»**, armá un sismo con magnitud, profundidad, latitud, longitud y mar o tierra, y mirá qué probabilidad le da el modelo de que la USGS lo marque. Hay alerta si la probabilidad es 0,27 o más. El tipo de magnitud está en «Opciones avanzadas», y otro desplegable explica qué significa cada sigla.
+3. **En «Probá el modelo»**, partí de un sismo real (el menú carga sus valores) o armá uno con magnitud, profundidad, latitud, longitud y mar o tierra, y mirá qué probabilidad le da el modelo de que la USGS lo marque. Hay alerta si la probabilidad es 0,27 o más. El tipo de magnitud está en «Opciones avanzadas», y otro desplegable explica qué significa cada sigla.
 
    ![Sección «Probá el modelo»: los controles, la probabilidad y la cruz que ubica el sismo](docs/img/proba-modelo.png)
 
@@ -49,11 +49,11 @@ Las dos filas de magnitud 5,5 muestran el hallazgo central: el mismo sismo pasa 
 
 ### Lo que encontramos
 
-- **La magnitud separa bien, pero no alcanza.** En el análisis exploratorio separó las clases en zona verde (1,38), pero el 21,7 % de los sismos de más de 7,5 no tiene la marca.
+- **La magnitud separa bien, pero no alcanza.** En el análisis exploratorio separó las clases en zona verde (1,38), pero la marca nunca llega al 100 %: entre los sismos que usa el modelo, el 18,2 % de los de más de 7,5 no la tiene (21,7 % en la Entrega 2, que incluía los meses sin marca cargada).
 - **La otra mitad de la regla es el lugar.** 230 de las 237 marcas de magnitud menor a 6 están en Alaska y la costa oeste de Norteamérica, donde la USGS opera un sistema de alerta regional con un umbral más bajo.
 - **La profundidad y la distancia a la costa casi no separan** (0,03 y 0,17; 0,42 si se miran sólo los sismos en el mar).
 
-![Mapa de «Lo que encontramos»: las marcas de magnitud menor a 6 se concentran en Alaska y la costa oeste](docs/img/hallazgo-mapa.png)
+![Mapa de «El modelo»: las marcas de magnitud menor a 6 se concentran en Alaska y la costa oeste](docs/img/hallazgo-mapa.png)
 
 ### El modelo
 
@@ -113,7 +113,7 @@ flowchart LR
 | `notebooks/` | Entrega 2 (análisis exploratorio) y Entrega 3 (modelado) |
 | `datos/DatasetTsunami.csv` | Copia congelada de la salida del pipeline, con 13.602 sismos del 01/01/2019 al 30/07/2026. Es la que usan el notebook de la Entrega 3 y la app |
 | `modelo.py` | Las piezas del modelo (el transformador `EsOceanico`, el pipeline, la validación por grupos, la semilla y el umbral). Es el mismo código del notebook de la Entrega 3 |
-| `build_app.py` | Toma el CSV, entrena el modelo elegido y calcula lo que muestra la app |
+| `build_app.py` | Toma el CSV, entrena el modelo elegido, calcula lo que muestra la app y repite los experimentos de la Entrega 3 que aparecen en ella (comparación de modelos, formas de partir, ablación, umbral, importancia y el árbol chico) |
 | `app_data/` | Lo que genera `build_app.py`: `sismos_app.csv`, `resumen.json` y `modelo.joblib` |
 | `app.py` | La aplicación de Streamlit. Los gráficos están hechos con Altair |
 | `docs/img/` | Las capturas de este README |
@@ -129,7 +129,8 @@ source .venv/Scripts/activate     # Git Bash en Windows
 # source .venv/bin/activate        # Linux o Mac
 pip install -r requirements.txt
 
-python build_app.py               # genera app_data/ (tarda unos segundos)
+python build_app.py               # genera app_data/ (tarda menos de un minuto)
+# python build_app.py --rapido    # sólo el modelo, sin repetir los experimentos
 streamlit run app.py              # abre la app en http://localhost:8501
 ```
 
