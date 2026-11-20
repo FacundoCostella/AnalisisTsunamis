@@ -8,7 +8,7 @@ Proyecto Integrador · Ciencia de Datos · UTN FRM · 2026 · Grupo 9 (Comisión
 
 **Aplicación:** https://integradortsunamis-grupo09.streamlit.app/
 
-![Portada de la aplicación: la pregunta, la idea central y los tres números que la sostienen](docs/img/portada.png)
+![Portada de la aplicación: la pregunta, de qué se trata el proyecto y qué significa la marca de la USGS](docs/img/portada.png)
 
 > **Ojo con la etiqueta.** `tsunami = 1` no dice si hubo una ola: es la marca que pone la USGS cuando el evento cumple su criterio de alerta, que depende de la magnitud y de la región. Lo que el modelo aprende es **qué sismos marca la USGS**, una buena aproximación a «sismos con potencial de tsunami».
 
@@ -18,13 +18,13 @@ La app presenta los datos con la estructura de **copa de martini** (Segel y Heer
 
 | Parte | Secciones de la app | Quién decide | Qué hace |
 |---|---|---|---|
-| Base | Portada | La app | Plantea la pregunta y da la respuesta corta con tres números |
+| Base | Portada | La app | Plantea la pregunta, cuenta de qué se trata el proyecto y aclara qué significa la marca de la USGS |
 | Tallo | Los datos · Lo que encontramos · El modelo | La app | Cuenta la historia en orden. Cada título afirma algo, un gráfico lo prueba y el desplegable «Cómo lo sabemos» tiene el detalle técnico |
 | Copa | Explorá · Probá el modelo | El lector | Comprueba la historia con sus propios filtros y casos |
 
 ## Cómo usar la app
 
-1. **Leé el tallo de arriba hacia abajo.** Los títulos solos cuentan la historia; si querés saber de dónde sale cada afirmación, abrí «Cómo lo sabemos». Todo el tallo se lee sin tocar nada: en «Los datos», cuántos sismos tienen la marca, los sismos en el tiempo y las columnas del dataset; en «Lo que encontramos», cómo cambia la marca con la magnitud y qué variables separan a los sismos con marca; en «El modelo», qué dio, en qué se apoya y las conclusiones.
+1. **Leé el tallo de arriba hacia abajo.** Los títulos solos cuentan la historia; si querés saber de dónde sale cada afirmación, abrí «Cómo lo sabemos». Todo el tallo se lee sin tocar nada: en «Los datos», cuántos sismos tienen la marca, las variables con las que trabajamos, por qué la validación del modelo se arma por grupos y las columnas que no se usan; en «Lo que encontramos», cómo cambia la marca con la magnitud y qué variables separan a los sismos con marca; en «El modelo», qué dio, en qué se apoya y las conclusiones.
 2. **En «Explorá»**, cada punto del mapa es un sismo, coloreado según lo que dijo el modelo: acierto con marca, falso negativo, falsa alarma, acierto sin marca o sin marca cargada. Arrastrá el mouse sobre el histograma de magnitud para elegir un rango (el mapa muestra sólo esos sismos), filtrá por resultado o región, hacé clic en la leyenda para resaltar un resultado y pasá el mouse por un punto para ver su detalle. Cada sismo lo predice un modelo que no lo vio.
 
    ![Sección «Explorá»: el mapa de sismos coloreado según lo que dijo el modelo](docs/img/explora.png)

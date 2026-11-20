@@ -190,13 +190,25 @@ def main():
         print("Repitiendo los experimentos de la Entrega 3 (tarda un par de minutos)…")
         exp = experimentos(datos, X_train, y_train, g_train, cv, modelo, X_test, y_test, proba_cv)
 
-    # 6a. Una tabla con todos los sismos y lo que dijo el modelo de cada uno
+    # 6a. Una tabla con todos los sismos y lo que dijo el modelo de cada uno.
+    # Para el gráfico de la validación por grupos se guarda también el grupo de cada sismo y en qué pedazo (1 a 5)
+    # cae cada sismo de entrenamiento si se parte al azar o por grupo.
+    pedazo_azar = np.zeros(len(X_train), dtype=int)
+    for i, (_, val) in enumerate(StratifiedKFold(n_splits=5, shuffle=True, random_state=SEMILLA).split(X_train, y_train)):
+        pedazo_azar[val] = i + 1
+    pedazo_grupo = np.zeros(len(X_train), dtype=int)
+    for i, (_, val) in enumerate(cv.split(X_train, y_train, g_train)):
+        pedazo_grupo[val] = i + 1
     partes = []
     for tabla, proba, conjunto in [(datos.iloc[idx_train], proba_cv, "entrenamiento"),
                                    (datos.iloc[idx_test], proba_test, "test"),
                                    (sin_marca, proba_sin_marca, "sin marca cargada")]:
         t = tabla[COLUMNAS_ORIGINALES].copy()
         t["conjunto"] = conjunto
+        t["grupo"] = grupos.iloc[idx_train if conjunto == "entrenamiento" else idx_test].to_numpy() \
+            if conjunto != "sin marca cargada" else ""
+        t["pedazo_azar"] = pedazo_azar if conjunto == "entrenamiento" else 0
+        t["pedazo_grupo"] = pedazo_grupo if conjunto == "entrenamiento" else 0
         t["probabilidad"] = proba.round(4)
         t["alerta"] = (proba >= UMBRAL).astype(int)
         t["resultado"] = (resultado(t["tsunami"].to_numpy(), t["alerta"].to_numpy())

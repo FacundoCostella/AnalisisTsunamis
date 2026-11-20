@@ -163,31 +163,31 @@ if guardado.get("version_sklearn") != sklearn.__version__:
 st.caption("Ciencia de Datos · UTN FRM · 2026 · Proyecto Integrador · Grupo 9 · Comisión 5K09")
 st.title("¿Qué características de un sismo permiten estimar si está asociado a un tsunami?")
 
-with st.container(border=True):
-    st.markdown("#### Antes de empezar: qué significa `tsunami = 1` en estos datos")
-    es, no_es = st.columns(2)
-    es.info("**Es la marca de alerta que pone la USGS** en su catálogo cuando un sismo cumple su criterio de alerta "
-            "de tsunami. Ese criterio depende de la magnitud **y de la región**: cerca de Alaska y de la costa oeste "
-            "de Norteamérica, donde la USGS opera un sistema de alerta propio, marca sismos más chicos que en el resto "
-            "del mundo.")
-    no_es.warning("**No es la confirmación de que hubo una ola.** La marca no mide el mar: un sismo puede tenerla sin "
-                  "que se haya registrado un tsunami. Por eso todo lo que sigue habla de **sismos con "
-                  "marca de la USGS**, y el modelo predice esa marca, no la ola.")
+st.header("De qué se trata")
+st.markdown(f"""
+Un **tsunami** es una serie de olas que se forma cuando un sismo grande mueve de golpe el fondo del mar. No todo sismo
+fuerte genera uno: depende de cuán grande es, de si ocurre bajo el mar o cerca de la costa, y de cuán profundo es.
 
-st.markdown(f"#### Con la magnitud y el lugar del sismo se anticipa el {pct(test['recall_tsunami'])} de los sismos "
-            "que la USGS marca con alerta de tsunami, y el lugar pesa tanto como la magnitud.")
+El **Servicio Geológico de Estados Unidos (USGS)** registra todos los sismos del mundo en un catálogo público, con su
+magnitud, su ubicación y su profundidad. Cuando un sismo cumple su criterio de alerta, le pone una **marca de tsunami**.
 
-chicos = modelados[(modelados["tsunami"] == 1) & (modelados["mag"] < 6)]
-c1, c2, c3 = st.columns(3)
-c1.metric("sismos con marca de la USGS detectados en el test",
-          f"{test['aciertos_con_marca']} de {test['aciertos_con_marca'] + test['falsos_negativos']}",
-          help=f"Recall de la clase con marca, con umbral {num(UMBRAL, 2)}")
-c2.metric("f1 macro en el test", num(test["f1_macro"]),
-          f"{num(test['f1_macro'] - resumen['piso_test']['f1_macro'])} sobre el piso", delta_color="off")
-c3.metric("marcas con magnitud menor a 6 que están en Alaska y la costa oeste",
-          f"{chicos['region'].isin(REGION_ALASKA_OESTE).sum()} de {len(chicos)}")
-st.caption(f"Medido sobre {miles(len(modelados))} sismos de magnitud 5 o más registrados por la USGS entre "
-           f"{pd.Timestamp(resumen['datos']['desde']).strftime('%d/%m/%Y')} y el 31/03/2026.")
+**Qué hicimos nosotros:** tomamos los {miles(len(sismos))} sismos de magnitud 5 o más registrados entre 2019 y 2026,
+buscamos qué distingue a los que tienen esa marca de los que no, y entrenamos un modelo que estima la probabilidad de
+que un sismo la reciba.
+""")
+pasos = [("1 · Los datos", "Un pipeline descarga todos los días los sismos del catálogo de la USGS."),
+         ("2 · El análisis", "Buscamos qué separa a los sismos con marca de los sin marca."),
+         ("3 · El modelo", "Aprende a estimar la probabilidad de que un sismo reciba la marca."),
+         ("4 · La aplicación", "Muestra lo que encontramos y deja explorar los datos y probar el modelo.")]
+for col, (titulo, texto) in zip(st.columns(4), pasos):
+    with col.container(border=True):
+        st.markdown(f"**{titulo}**  \n{texto}")
+
+st.subheader("`tsunami = 1` no significa que hubo una ola: es la marca de alerta de la USGS")
+st.markdown("La marca no mide el mar. La pone la USGS cuando un sismo cumple su criterio de alerta, y ese criterio "
+            "depende de la magnitud **y de la región**: cerca de Alaska y de la costa oeste de Norteamérica, donde la "
+            "USGS opera un sistema de alerta propio, marca sismos más chicos que en el resto del mundo. Por eso toda la "
+            "aplicación habla de **sismos con marca de la USGS**, y el modelo predice esa marca, no la ola.")
 
 st.divider()
 
@@ -200,20 +200,26 @@ n_total, n_marca = len(sismos), int(sismos["tsunami"].sum())
 st.subheader(f"De {miles(n_total)} sismos fuertes registrados desde 2019, sólo {miles(n_marca)} llevan la marca de "
              f"tsunami: 1 de cada {round(n_total / n_marca)}")
 
-clases = pd.DataFrame({"marca": [SIN, CON], "sismos": [n_total - n_marca, n_marca]})
-clases["texto"] = [f"{miles(int(n))} ({pct(n / n_total, 1)})" for n in clases["sismos"]]
-barras_clases = alt.Chart(clases).mark_bar(size=46).encode(
-    y=alt.Y("marca:N", title=None, sort=[SIN, CON], axis=alt.Axis(labelFontSize=13)),
-    x=alt.X("sismos:Q", title="sismos", scale=alt.Scale(domain=[0, n_total * 1.12])),
+clases = pd.DataFrame({"marca": [CON, SIN], "sismos": [n_marca, n_total - n_marca], "orden": [0, 1]})
+clases["parte"] = clases["sismos"] / n_total
+dona = alt.Chart(clases).mark_arc(innerRadius=100, outerRadius=155, stroke="white", strokeWidth=2).encode(
+    theta=alt.Theta("sismos:Q", stack=True), order=alt.Order("orden:Q"),
     color=alt.Color("marca:N", scale=ESCALA_MARCA, legend=None),
-    tooltip=[alt.Tooltip("marca:N", title=" "), alt.Tooltip("sismos:Q")])
-texto_clases = barras_clases.mark_text(align="left", dx=6, fontSize=14, fontWeight="bold", color="#222").encode(
-    text="texto:N")
-grafico((barras_clases + texto_clases).properties(width=900, height=150))
-st.markdown(f"Cada fila es un sismo de magnitud 5 o más del catálogo de la USGS, y la columna `tsunami` dice si tiene "
-            f"la marca. **La diferencia es enorme**: un modelo que diga siempre «sin marca» acierta el "
-            f"{pct(1 - n_marca / n_total)} sin aprender nada. Por eso la accuracy no sirve para medir el modelo, y se usa "
-            "el f1 macro, que le da el mismo peso a la clase chica.")
+    tooltip=[alt.Tooltip("marca:N", title=" "), alt.Tooltip("sismos:Q"), alt.Tooltip("parte:Q", format=".1%")])
+centro_num = alt.Chart(pd.DataFrame({"t": [pct(n_marca / n_total, 1)]})).mark_text(
+    x=170, y=158, fontSize=38, fontWeight="bold", color=AZUL).encode(text="t:N")
+centro_txt = alt.Chart(pd.DataFrame({"t": ["con marca de la USGS"]})).mark_text(
+    x=170, y=192, fontSize=13, color="#444").encode(text="t:N")
+k1, k2 = st.columns([1, 1.25])
+with k1:
+    grafico((dona + centro_num + centro_txt).properties(width=340, height=340))
+with k2:
+    st.metric(f"sismos {CON}", miles(n_marca), pct(n_marca / n_total, 1), delta_color="off")
+    st.metric(f"sismos {SIN}", miles(n_total - n_marca), pct(1 - n_marca / n_total, 1), delta_color="off")
+    st.markdown(f"Cada fila es un sismo de magnitud 5 o más del catálogo de la USGS, y la columna `tsunami` dice si "
+                f"tiene la marca. **La diferencia es enorme**: un modelo que diga siempre «sin marca» acierta el "
+                f"{pct(1 - n_marca / n_total)} sin aprender nada. Por eso la accuracy no sirve para medir el modelo, y "
+                "se usa el f1 macro, que le da el mismo peso a la clase chica.")
 
 d1, d2, d3, d4 = st.columns(4)
 d1.metric("columnas", resumen["datos"]["columnas"])
@@ -221,64 +227,140 @@ d2.metric("desde", pd.Timestamp(resumen["datos"]["desde"]).strftime("%d/%m/%Y"))
 d3.metric("hasta", pd.Timestamp(resumen["datos"]["hasta"]).strftime("%d/%m/%Y"))
 d4.metric("sismos duplicados", resumen["datos"]["ids_duplicados"])
 
-st.markdown("##### Los sismos en el tiempo")
-mensual = sismos.groupby("mes", as_index=False).agg(sismos=("id", "count"), con_marca=("tsunami", "sum"))
-mensual["fecha"] = pd.to_datetime(mensual["mes"] + "-01")
-picos = mensual.nlargest(2, "sismos").copy()
-picos["etiqueta"] = [f"{r.sismos} sismos: réplicas en {sismos.loc[sismos['mes'] == r.mes, 'region'].mode()[0]}"
-                     for r in picos.itertuples()]
-n_recientes = int((sismos["conjunto"] == "sin marca cargada").sum())
-sombra = pd.DataFrame({"desde": [pd.Timestamp(modelo.CORTE)],
-                       "hasta": [mensual["fecha"].max() + pd.offsets.MonthBegin(1)],
-                       "t": [f"sin marca cargada ({n_recientes} sismos)"]})
-eje_t = alt.X("fecha:T", title=None, axis=alt.Axis(format="%Y", tickCount="year"))
-zona_gris = alt.Chart(sombra).mark_rect(color=GRIS, opacity=0.18).encode(x="desde:T", x2="hasta:T")
-linea_t = alt.Chart(mensual).mark_line(color=NEUTRO, point=alt.OverlayMarkDef(color=NEUTRO, size=16)).encode(
-    x=eje_t, y=alt.Y("sismos:Q", title="sismos por mes"),
-    tooltip=[alt.Tooltip("mes:N"), alt.Tooltip("sismos:Q"), alt.Tooltip("con_marca:Q", title="con marca")])
-etiquetas_t = alt.Chart(picos).mark_text(align="right", dx=-8, dy=-2, fontSize=11, color="#222").encode(
-    x="fecha:T", y="sismos:Q", text="etiqueta:N")
-texto_sombra = alt.Chart(sombra).mark_text(align="right", dx=-4, y=12, fontSize=11, color=GRIS).encode(
-    x="hasta:T", text="t:N")
-arriba = (zona_gris + linea_t + etiquetas_t + texto_sombra).properties(width=900, height=210)
-barras_t = alt.Chart(mensual).mark_bar(color=AZUL).encode(
-    x=eje_t, y=alt.Y("con_marca:Q", title="con marca por mes"),
-    tooltip=[alt.Tooltip("mes:N"), alt.Tooltip("con_marca:Q", title="con marca")])
-abajo = (zona_gris + barras_t).properties(width=900, height=110)
-grafico(alt.vconcat(arriba, abajo, spacing=6))
-st.markdown(f"El catálogo trae unos {round(mensual['sismos'].median())} sismos por mes, con dos cosas para tener en "
-            "cuenta:  \n"
-            "- **Los picos son secuencias de réplicas**: decenas de sismos en el mismo lugar después de uno grande. Las "
-            "filas no son independientes, y por eso la validación del modelo se arma por grupos de lugar y mes.  \n"
-            "- **Desde abril de 2026 la marca todavía no está cargada** (barras azules en cero): la USGS la carga cuando "
-            f"revisa el evento, y la descarga tomó esos sismos antes. Por eso el modelo usa sólo los "
-            f"{miles(len(modelados))} sismos hasta el 31/03/2026.")
-
-st.markdown("##### Las columnas del dataset")
-filas_columnas = [
-    ("mag", "numérica", "Magnitud del sismo", "Entra al modelo"),
-    ("latitude, longitude", "numérica", "Ubicación del epicentro", "Entran al modelo"),
-    ("depth", "numérica", "Profundidad en km (46 % vale 10 km: el valor que fija la USGS cuando no puede medirla)",
-     "Entra al modelo"),
-    ("magType", "categórica", "Método con que se calculó la magnitud (mww, mb, ml…)", "Entra al modelo (one-hot)"),
-    ("dist_costa_km", "numérica", "Distancia a la costa, con signo (columna propia del pipeline)",
-     "Entra al modelo como mar o tierra"),
-    ("tsunami", "categórica (0/1)", "La marca de alerta de la USGS", "Es lo que se predice"),
-    ("sig", "numérica", "«Significancia» del evento según la USGS", "Sale: fuga (contiene la alerta)"),
-    ("nst, dmin, gap, rms", "numéricas", "Cómo registró el sismo la red de estaciones",
-     "Salen: no mejoran el modelo"),
-    ("time", "temporal", "Fecha y hora (UTC)", "Sólo arma los grupos de validación"),
-    ("place", "texto libre", "Descripción del lugar (de ahí sale la región)", "Sale: identificador"),
-    ("id, type, status, net", "identificador / categóricas",
-     "Código del sismo, tipo de evento, estado de revisión y red", "Salen: identificador o constantes"),
+st.markdown("##### Las variables con las que trabajamos")
+st.caption("De las 18 columnas del catálogo, éstas son las que usa el modelo. Las demás, y por qué no se usan, están "
+           "más abajo.")
+rango_de = lambda c, dec=1: (f"{num(sismos[c].min(), dec)} a {num(sismos[c].max(), dec)}" if dec else
+                             f"{miles(round(sismos[c].min()))} a {miles(round(sismos[c].max()))}")
+cuota_tipo = sismos["magType"].value_counts(normalize=True)
+tarjetas = [
+    ("Magnitud", "mag", "Cuánta energía liberó el sismo, en escala logarítmica.", f"De {rango_de('mag')}"),
+    ("Profundidad", "depth", "A cuántos kilómetros bajo la superficie empezó el sismo.", f"De {rango_de('depth', 0)} km"),
+    ("Ubicación", "latitude, longitude", "Las coordenadas del epicentro, el punto de la superficie sobre el sismo.",
+     "Todo el mundo"),
+    ("Tipo de magnitud", "magType", "Con qué método calculó la USGS la magnitud.",
+     f"mww ({pct(cuota_tipo.get('mww', 0))}), mb ({pct(cuota_tipo.get('mb', 0))}) y otros"),
+    ("Mar o tierra", "dist_costa_km", "Nuestra variable: distancia a la costa, negativa en tierra y positiva en el mar. "
+     "El modelo usa sólo el signo.", f"De {rango_de('dist_costa_km', 0)} km"),
 ]
-tabla_columnas = pd.DataFrame(filas_columnas, columns=["columna", "tipo", "qué es", "uso"])
-nulos_por = {c: sismos[c].isna().mean() for c in ["nst", "dmin", "gap", "rms"]}
-tabla_columnas["nulos"] = np.where(tabla_columnas["columna"] == "nst, dmin, gap, rms",
-                                   f"nst {pct(nulos_por['nst'])}, el resto menos de 1 %", "—")
+cols_var = st.columns(3) + st.columns(3)
+for col, (nombre, columna, que_es, rango_txt) in zip(cols_var, tarjetas):
+    with col.container(border=True):
+        st.markdown(f"**{nombre}** · `{columna}`  \n{que_es}  \n*{rango_txt}*")
+cols_var[5].info(f"**La marca** · `tsunami`  \n**Lo que queremos predecir:** 1 si la USGS marcó el sismo con alerta "
+                 f"de tsunami, 0 si no.  \n*{miles(n_marca)} de {miles(n_total)} sismos*")
+
+st.markdown("##### Por qué la validación del modelo se arma por grupos")
+st.markdown("**Los sismos no son independientes: uno grande trae decenas de réplicas.** Cada fila es un sismo, pero "
+            "después de un sismo grande vienen decenas de réplicas en el mismo lugar y en los días siguientes. Para medir "
+            "el modelo, los datos se parten en 5 pedazos: se entrena con cuatro y se evalúa con el quinto, cinco veces. "
+            "Si una réplica queda en los pedazos de entrenamiento y otra de la misma secuencia en el de evaluación, el "
+            "modelo «reconoce» la secuencia y el resultado sale mejor de lo que es. Por eso los pedazos se arman **por "
+            "grupo**: una celda de 2° × 2° de latitud y longitud y un mes calendario. Todas las réplicas cercanas caen "
+            "en el mismo grupo, y el grupo entero queda en un solo pedazo. Así se ve con la secuencia más grande del "
+            "dataset:")
+
+conteo_grupos = modelados["grupo"].value_counts()
+grupo_mayor = conteo_grupos.index[0]
+secuencia = modelados[modelados["grupo"] == grupo_mayor].copy()
+principal = secuencia.loc[secuencia["mag"].idxmax()]
+fecha_principal = pd.Timestamp(principal["time"])
+lat0, lon0 = int(np.floor(principal["latitude"] / 2) * 2), int(np.floor(principal["longitude"] / 2) * 2)
+lat_a, lat_b = lat0 - 4, lat0 + 6
+lon_a, lon_b = max(lon0 - 4, -180), max(lon0 - 4, -180) + 10
+zona = modelados[(modelados["mes"] == principal["mes"]) & modelados["latitude"].between(lat_a, lat_b)
+                 & modelados["longitude"].between(lon_a, lon_b)].copy()
+
+# La zona dividida en las celdas de 2° × 2° que usan los grupos, con cuántos sismos tuvo cada una ese mes
+zona["celda_lat"] = (np.floor(zona["latitude"] / 2) * 2).astype(int)
+zona["celda_lon"] = (np.floor(zona["longitude"] / 2) * 2).astype(int)
+por_celda = zona.groupby(["celda_lat", "celda_lon"]).size()
+celdas = pd.DataFrame([(la, lo) for la in range(lat_a, lat_b, 2) for lo in range(lon_a, lon_b, 2)],
+                      columns=["celda_lat", "celda_lon"])
+celdas["sismos"] = [int(por_celda.get((la, lo), 0)) for la, lo in zip(celdas["celda_lat"], celdas["celda_lon"])]
+celdas["lat2"], celdas["lon2"] = celdas["celda_lat"] + 2, celdas["celda_lon"] + 2
+celdas["centro_lat"], celdas["centro_lon"] = celdas["celda_lat"] + 1, celdas["celda_lon"] + 1
+celdas["oscura"] = celdas["sismos"] > conteo_grupos.iloc[0] * 0.4
+GRADOS = "datum.value + '°'"
+eje_x = alt.X("celda_lon:Q", title="longitud", scale=alt.Scale(domain=[lon_a, lon_b], nice=False),
+              axis=alt.Axis(values=list(range(lon_a, lon_b + 1, 2)), labelExpr=GRADOS, grid=False))
+eje_y = alt.Y("celda_lat:Q", title="latitud", scale=alt.Scale(domain=[lat_a, lat_b], nice=False),
+              axis=alt.Axis(values=list(range(lat_a, lat_b + 1, 2)), labelExpr=GRADOS, grid=False))
+tablero = alt.Chart(celdas).mark_rect(stroke="white", strokeWidth=2).encode(
+    x=eje_x, x2="lon2:Q", y=eje_y, y2="lat2:Q",
+    color=alt.Color("sismos:Q", legend=None, scale=alt.Scale(domain=[0, int(celdas["sismos"].max())],
+                                                             range=["#f1f0ec", "#2f3a44"])),
+    tooltip=[alt.Tooltip("celda_lat:Q", title="latitud desde"), alt.Tooltip("celda_lon:Q", title="longitud desde"),
+             alt.Tooltip("sismos:Q", title="sismos en el mes")])
+numeros = alt.Chart(celdas[celdas["sismos"] > 0]).mark_text(fontSize=15, fontWeight="bold").encode(
+    x="centro_lon:Q", y="centro_lat:Q", text="sismos:Q",
+    color=alt.condition("datum.oscura", alt.value("white"), alt.value("#555")))
+marca_principal = alt.Chart(pd.DataFrame({"x": [principal["longitude"]], "y": [principal["latitude"]]})).mark_point(
+    shape="diamond", filled=True, color="#e3242b", size=160).encode(x="x:Q", y="y:Q")
+tablero_zona = (tablero + numeros + marca_principal).properties(
+    width=430, height=430, title=f"Sismos por celda de 2° × 2° en {fecha_principal.strftime('%m/%Y')}")
+
+# Un mapamundi chico, centrado en el Pacífico, con la zona marcada en rojo
+recuadro = pd.DataFrame({"lon": [lon_a, lon_b, lon_a, lon_a], "lat": [lat_a, lat_a, lat_b, lat_a],
+                         "lon2": [lon_b, lon_b, lon_b, lon_a], "lat2": [lat_a, lat_b, lat_b, lat_b]})
+lados_zona = alt.Chart(recuadro).mark_rule(color="#e3242b", strokeWidth=2.5).encode(
+    longitude="lon:Q", latitude="lat:Q", longitude2="lon2:Q", latitude2="lat2:Q")
+ubicacion = alt.layer(fondo, lados_zona).project(type="equirectangular", rotate=[180, 0, 0]).properties(
+    width=430, height=215, title="Dónde queda la zona (recuadro rojo)")
+
+secuencia["dia"] = pd.to_datetime(secuencia["time"]).dt.day
+por_dia = secuencia.groupby("dia").size().reindex(range(1, 32), fill_value=0).rename_axis("dia").reset_index(
+    name="sismos")
+por_dia["principal"] = np.where(por_dia["dia"] == fecha_principal.day, "día del sismo grande", "otro día")
+barras_dia = alt.Chart(por_dia).mark_bar().encode(
+    x=alt.X("dia:O", title=f"día de {fecha_principal.strftime('%m/%Y')}", axis=alt.Axis(labelAngle=0, values=[1, 5, 10, 15, 20, 25, 30])),
+    y=alt.Y("sismos:Q", title=f"sismos en la celda de {conteo_grupos.iloc[0]}"),
+    color=alt.Color("principal:N", legend=None,
+                    scale=alt.Scale(domain=["día del sismo grande", "otro día"], range=["#e3242b", NEUTRO])),
+    tooltip=[alt.Tooltip("dia:O", title="día"), "sismos:Q"]).properties(
+    width=430, height=430, title="Sismos por día en esa celda")
+grafico(alt.vconcat(ubicacion, alt.hconcat(tablero_zona, barras_dia, spacing=40), spacing=20))
+st.markdown(f"En {fecha_principal.strftime('%m/%Y')} hubo {len(zona)} sismos en esta zona, y **{len(secuencia)} cayeron "
+            f"en la misma celda**, la oscura (el rombo rojo es el sismo de {num(principal['mag'], 1)} del día "
+            f"{fecha_principal.day}). Casi todos son sus réplicas, y se concentran en los días que le siguen. Cada "
+            "cuadrado es una celda de 2° × 2° de latitud y longitud: esa celda, en ese mes, es un grupo.")
+
+reparto_azar = secuencia["pedazo_azar"].value_counts().sort_index()
+st.markdown(f"""
+**Qué pasa con esa secuencia según cómo se parten los datos.** Para medir el modelo, los sismos se reparten en 5
+pedazos: se entrena con cuatro y se evalúa con el quinto.
+
+- **Al azar**, los {len(secuencia)} sismos de la celda quedan repartidos en los 5 pedazos
+  ({', '.join(str(v) for v in reparto_azar.values[:-1])} y {reparto_azar.values[-1]}): cuando el modelo se evalúa en
+  uno, ya vio a sus «hermanas» en los otros cuatro.
+- **Por grupo**, los {len(secuencia)} quedan en el mismo pedazo: el modelo nunca ve la secuencia mientras se lo evalúa
+  con ella.
+""")
+
+g1, g2, g3, g4 = st.columns(4)
+g1.metric("grupos", miles(len(conteo_grupos)))
+g2.metric("grupos con un solo sismo", miles(int((conteo_grupos == 1).sum())))
+grandes_g = conteo_grupos[conteo_grupos >= 10]
+g3.metric("grupos de 10 sismos o más", len(grandes_g),
+          f"{pct(grandes_g.sum() / len(modelados))} de los sismos", delta_color="off")
+g4.metric("el grupo más grande", f"{conteo_grupos.iloc[0]} sismos")
+
+st.markdown("##### Las otras columnas del catálogo, y por qué no se usan")
+filas_columnas = [
+    ("sig", "numérica", "«Significancia» del evento según la USGS", "Fuga: la USGS la calcula con la alerta de tsunami"),
+    ("nst, dmin, gap, rms", "numéricas", "Cómo registró el sismo la red de estaciones",
+     "No mejoran el modelo, y la USGS las recalcula al revisar el evento"),
+    ("time", "temporal", "Fecha y hora (UTC)", "No describe al sismo; sólo arma los grupos de validación"),
+    ("place", "texto libre", "Descripción del lugar (de ahí sale la región)", "Identificador"),
+    ("id", "identificador", "Código del sismo en el catálogo", "Identificador"),
+    ("type, status, net", "categóricas", "Tipo de evento, estado de revisión y red que lo informó",
+     "Constantes o casi: no varían entre sismos"),
+]
+tabla_columnas = pd.DataFrame(filas_columnas, columns=["columna", "tipo", "qué es", "por qué no se usa"])
 st.dataframe(tabla_columnas, hide_index=True)
-st.caption("Los únicos nulos están en las cuatro columnas de la red de estaciones: son de instrumentación (muchas "
-           "redes no informan `nst`), no errores de carga. Las otras 14 columnas están completas.")
+nulos_nst = sismos["nst"].isna().mean()
+st.caption(f"Los únicos nulos del dataset están en las cuatro columnas de la red de estaciones (`nst` {pct(nulos_nst)}, "
+           "el resto menos de 1 %): son de instrumentación, no errores de carga. Las otras 14 columnas están completas.")
 
 with st.expander("Cómo lo sabemos"):
     st.markdown(f"""
@@ -312,6 +394,12 @@ los números se puedan reproducir.
 """)
     st.dataframe(pd.DataFrame(resumen["filtros"]).rename(
         columns={"paso": "Paso", "filas": "Sismos", "con_marca": "Con marca"}), hide_index=True)
+    recientes_ = sismos[sismos["conjunto"] == "sin marca cargada"]
+    st.markdown(f"**Por qué el corte en el 31/03/2026.** Desde abril de 2026 la proporción de sismos con marca cae a "
+                f"casi cero: de los {miles(len(recientes_))} sismos de abril a julio, sólo "
+                f"{int(recientes_['tsunami'].sum())} la tienen, y hay sismos de 7,2 a 7,8 en el mar sin marca. No dejó "
+                "de haber tsunamis: la USGS carga la marca cuando revisa el evento, y la descarga tomó esos sismos "
+                "antes. Si se dejaban, el modelo aprendía que esos sismos no se marcan.")
     sep_sig = separacion(con_marca["sig"], sin_marca["sig"])
     _, s_ms, _ = asociacion(modelados["mag"], modelados["sig"])
     con_sig = {a["variante"]: a for a in exp["ablacion"]}["+ sig (fuga)"]
@@ -396,14 +484,88 @@ barras_sep = alt.Chart(seps).mark_bar(size=22).encode(
 texto_sep = barras_sep.mark_text(align="left", dx=5, color="#222", fontSize=12).encode(text="texto:N")
 grafico((fondo_sem + barras_sep + texto_sep).properties(width=900, height=230))
 
+# --- La profundidad: lo que la intuición física decía y no se sostuvo
+st.markdown("##### ¿Los sismos con marca son más superficiales?")
+sep_prof = separacion(con_marca["depth"], sin_marca["depth"])
+prof = modelados.assign(rango=pd.cut(modelados["depth"], CORTES_PROF, labels=RANGOS_PROF))
+reparto = prof.groupby(["marca", "rango"], observed=True).size().reset_index(name="sismos")
+reparto["parte"] = reparto["sismos"] / reparto.groupby("marca")["sismos"].transform("sum")
+reparto["rango"] = reparto["rango"].astype(str)
+reparto["orden"] = reparto["rango"].map({r_: i for i, r_ in enumerate(RANGOS_PROF)})
+sup = reparto[reparto["orden"] == 0].set_index("marca")["parte"]
+barras_p = alt.Chart(reparto).mark_bar().encode(
+    y=alt.Y("marca:N", title=None, sort=[CON, SIN], axis=alt.Axis(labelFontSize=12)),
+    x=alt.X("parte:Q", title="parte de los sismos de cada grupo", axis=alt.Axis(format="%"), stack="normalize"),
+    color=alt.Color("rango:N", title="profundidad", sort=RANGOS_PROF,
+                    scale=alt.Scale(domain=RANGOS_PROF, range=PROFUNDIDAD), legend=alt.Legend(orient="top")),
+    order=alt.Order("orden:Q"),
+    tooltip=["marca:N", "rango:N", "sismos:Q", alt.Tooltip("parte:Q", format=".1%")])
+texto_p = alt.Chart(reparto[reparto["orden"] == 0]).mark_text(align="left", x=8, color="#1f3d1a", fontSize=13,
+                                                             fontWeight="bold").encode(
+    y=alt.Y("marca:N", sort=[CON, SIN]), text=alt.Text("parte:Q", format=".1%"))
+grafico((barras_p + texto_p).properties(width=900, height=150))
+st.markdown(f"Un tsunami lo genera un sismo que mueve el fondo del mar, y eso pasa con los sismos superficiales. Por eso "
+            f"esperábamos que los sismos con marca fueran más superficiales. **No es así:** {pct(sup[CON], 1)} de los "
+            f"sismos con marca tiene menos de 70 km de profundidad, pero también {pct(sup[SIN], 1)} de los sin marca. "
+            "Las dos barras son casi iguales, porque los sismos profundos son raros en general (separación "
+            f"{num(sep_prof, 3)}, zona {semaforo(sep_prof)}). Y {int((con_marca['depth'] > 300).sum())} sismos de más de "
+            "300 km tienen la marca, aunque un sismo tan profundo casi no mueve el fondo del mar: la marca de la USGS no "
+            "mira la profundidad.")
+
+# --- La matriz de correlación de la Entrega 2 (sobre los 13.602 sismos, igual que el notebook)
+st.markdown("##### ¿Hay columnas que repiten la misma información?")
+COLS_CORR = ["mag", "depth", "dist_costa_km", "latitude", "longitude", "nst", "gap", "dmin", "rms", "sig", "tsunami"]
+matriz = sismos[COLS_CORR].corr()
+largo = matriz.reset_index().melt(id_vars="index", var_name="columna", value_name="r").rename(columns={"index": "fila"})
+posicion = {c: i for i, c in enumerate(COLS_CORR)}
+largo = largo[[posicion[f] >= posicion[c] for f, c in zip(largo["fila"], largo["columna"])]].copy()  # triángulo inferior
+largo["fuerte"] = largo["r"].abs() >= 0.6
+celdas_c = alt.Chart(largo).mark_rect(stroke="white", strokeWidth=1).encode(
+    x=alt.X("columna:N", sort=COLS_CORR, title=None, axis=alt.Axis(labelAngle=-45, orient="bottom")),
+    y=alt.Y("fila:N", sort=COLS_CORR, title=None),
+    color=alt.Color("r:Q", title="correlación de Pearson",
+                    scale=alt.Scale(scheme="redblue", reverse=True, domain=[-1, 1]),
+                    legend=alt.Legend(orient="right", gradientLength=300)),
+    tooltip=["fila:N", "columna:N", alt.Tooltip("r:Q", format=".2f")])
+textos_c = alt.Chart(largo).mark_text(fontSize=10).encode(
+    x=alt.X("columna:N", sort=COLS_CORR), y=alt.Y("fila:N", sort=COLS_CORR), text=alt.Text("r:Q", format=".2f"),
+    color=alt.condition("datum.fuerte", alt.value("white"), alt.value("#222")))
+pares_clave = [("mag", "sig"), ("dist_costa_km", "dmin"), ("nst", "gap"), ("mag", "nst"), ("depth", "dist_costa_km")]
+filas_pares = []
+for a_, b_ in pares_clave:
+    p_, s_, br_ = asociacion(sismos[a_], sismos[b_])
+    filas_pares.append({"par": f"{a_} – {b_}", "Pearson": round(p_, 2), "Spearman": round(s_, 2),
+                        "brecha": round(br_, 2), "zona (Spearman)": semaforo(s_, "correlacion")})
+mc1, mc2 = st.columns([1.35, 1])
+with mc1:
+    grafico((celdas_c + textos_c).properties(width=470, height=470,
+                                             title="Matriz de correlación entre columnas numéricas"))
+with mc2:
+    st.markdown("**Los pares que se destacan**, con Pearson (relación en línea recta), Spearman (relación que sube o "
+                "baja aunque no sea recta) y la brecha entre los dos:")
+    st.dataframe(pd.DataFrame(filas_pares), hide_index=True)
+    st.markdown(f"""
+- **`sig` es casi una copia de la magnitud** (Spearman {num(filas_pares[0]['Spearman'], 2)}): otra señal de que no trae
+  información nueva, sólo la alerta.
+- **`dist_costa_km` y `dmin` se parecen** ({num(filas_pares[1]['Pearson'], 2)}): las estaciones están en tierra, así que
+  cuanto más mar adentro, más lejos queda la estación más cercana.
+- **Ningún par de columnas candidatas pasa 0,6**, así que no se descartó nada por redundancia.
+- **En la fila de `tsunami`, ninguna columna se acerca a la marca por sí sola:** la más alta es la magnitud
+  ({num(matriz.loc['tsunami', 'mag'], 2)}).
+""")
+st.caption(f"Calculada sobre los {miles(n_total)} sismos, igual que en el notebook de la Entrega 2. Rojo: correlación "
+           "positiva; azul: negativa. Sólo se muestra la mitad de abajo, porque la de arriba repite los mismos valores.")
+
+# --- El resumen
 tipos_m = modelados.groupby("magType")["tsunami"].agg(sismos="size", con_marca="sum")
 st.markdown(
-    f"**La magnitud es la única variable física que separa bien.** Las otras dos que dicta la intuición física casi no "
-    f"separan: los sismos con marca no son más superficiales que los sin marca, y la distancia a la costa distingue algo "
+    f"**En resumen: la magnitud es la única variable física que separa bien.** Las otras dos que dicta la intuición "
+    f"física casi no separan: los sismos con marca no son más superficiales, y la distancia a la costa distingue algo "
     f"sólo si se mira dentro del mar. `sig` separa muy bien, pero porque la USGS la calcula con la alerta: es una fuga y "
-    f"se descartó (sección «Los datos»). Además, el **tipo de magnitud** cambia mucho las cosas: de los "
-    f"{miles(int(tipos_m.loc['mb', 'sismos']))} sismos medidos en `mb` sólo {int(tipos_m.loc['mb', 'con_marca'])} "
-    f"tienen marca, contra {pct(tipos_m.loc['mww', 'con_marca'] / tipos_m.loc['mww', 'sismos'], 1)} en `mww`.  \n"
+    f"se descartó (sección «Los datos»). Ninguna columna repite a otra, salvo `sig` a la magnitud. Además, el **tipo de "
+    f"magnitud** cambia mucho las cosas: de los {miles(int(tipos_m.loc['mb', 'sismos']))} sismos medidos en `mb` sólo "
+    f"{int(tipos_m.loc['mb', 'con_marca'])} tienen marca, contra "
+    f"{pct(tipos_m.loc['mww', 'con_marca'] / tipos_m.loc['mww', 'sismos'], 1)} en `mww`.  \n"
     "Lo que el análisis no podía explicar es por qué hay sismos grandes sin marca y sismos chicos con marca. "
     "Eso lo resolvió el modelo: **el lugar**.")
 
@@ -414,13 +576,6 @@ with st.expander("Cómo lo sabemos"):
     grandes = modelados[modelados["mag"] > 7.5]
     excepciones = grandes[grandes["tsunami"] == 0]
     sep_mag = separacion(con_marca["mag"], sin_marca["mag"])
-    sep_prof = separacion(con_marca["depth"], sin_marca["depth"])
-    prof = modelados.assign(rango=pd.cut(modelados["depth"], CORTES_PROF, labels=RANGOS_PROF))
-    reparto = prof.groupby(["marca", "rango"], observed=True).size().reset_index(name="sismos")
-    reparto["parte"] = reparto["sismos"] / reparto.groupby("marca")["sismos"].transform("sum")
-    reparto["rango"] = reparto["rango"].astype(str)
-    reparto["orden"] = reparto["rango"].map({r_: i for i, r_ in enumerate(RANGOS_PROF)})
-    sup = reparto[reparto["orden"] == 0].set_index("marca")["parte"]
     st.markdown(f"""
 Es la distancia entre los dos promedios medida en desvíos. Menos de 0,2 es zona roja, de 0,2 a 0,8 amarilla y más de 0,8
 verde. Un verde no alcanza para usar una columna (`sig`), y un rojo no alcanza para descartarla (la profundidad entró
@@ -431,28 +586,14 @@ La pregunta era si todo sismo de más de 7,5 tiene marca: {len(excepciones)} de 
 ({pct(len(excepciones) / len(grandes), 1)}) no la tienen. Buena variable, mal umbral fijo.
 
 **La que no se sostuvo: la profundidad** (separación {num(sep_prof, 3)}, zona {semaforo(sep_prof)}). La pregunta era si
-los sismos con marca son más superficiales. Es cierto que {pct(sup[CON], 1)} de ellos tiene menos de 70 km, pero también
-{pct(sup[SIN], 1)} de los sin marca: las dos barras de abajo son casi iguales, porque los sismos profundos son raros en
-general. Además, {int((con_marca['depth'] > 300).sum())} sismos de más de 300 km tienen la marca, aunque un sismo tan
-profundo casi no mueve el fondo del mar.
+los sismos con marca son más superficiales: el gráfico de arriba muestra que no.
 """)
-    barras_p = alt.Chart(reparto).mark_bar().encode(
-        y=alt.Y("marca:N", title=None, sort=[CON, SIN]),
-        x=alt.X("parte:Q", title=None, axis=alt.Axis(format="%"), stack="normalize"),
-        color=alt.Color("rango:N", title="profundidad", sort=RANGOS_PROF,
-                        scale=alt.Scale(domain=RANGOS_PROF, range=PROFUNDIDAD), legend=alt.Legend(orient="top")),
-        order=alt.Order("orden:Q"),
-        tooltip=["marca:N", "rango:N", "sismos:Q", alt.Tooltip("parte:Q", format=".1%")])
-    grafico(barras_p.properties(width=700, height=110))
     st.markdown(f"""
 **Sobre los números.** En la Entrega 2 las hipótesis se midieron sobre los {miles(n_total)} sismos. Acá se miden sobre
 los {miles(len(modelados))} que usa el modelo, porque desde la Entrega 3 sabemos que los de abril a julio de 2026 no
 tienen la marca cargada. Las separaciones cambian en el tercer decimal; lo único que se mueve es la proporción de sismos
-de más de 7,5 sin marca: 21,7 % en la Entrega 2 y {pct(len(excepciones) / len(grandes), 1)} acá.
-
-**Redundancias.** En la matriz de correlación ningún par de columnas candidatas pasa 0,6, así que no se descartó nada por
-redundancia. Los pares más altos son `mag`–`sig` (otra señal de que `sig` copia a la magnitud) y
-`dist_costa_km`–`dmin` (las estaciones están en tierra: cuanto más mar adentro, más lejos queda la estación).
+de más de 7,5 sin marca: 21,7 % en la Entrega 2 y {pct(len(excepciones) / len(grandes), 1)} acá. La matriz de
+correlación sí se muestra sobre los {miles(n_total)} sismos, igual que en el notebook.
 """)
 
 st.divider()
@@ -466,6 +607,16 @@ st.subheader(f"El modelo detecta {test['aciertos_con_marca']} de cada "
              f"{test['aciertos_con_marca'] + test['falsos_negativos']} sismos con marca, "
              f"a cambio de una falsa alarma cada "
              f"{round((test['verdaderos_negativos'] + test['falsas_alarmas']) / test['falsas_alarmas'])} sismos sin marca")
+
+r1, r2, r3 = st.columns(3)
+r1.metric("sismos con marca detectados en el test",
+          f"{test['aciertos_con_marca']} de {test['aciertos_con_marca'] + test['falsos_negativos']}",
+          help=f"Recall de la clase con marca, con umbral {num(UMBRAL, 2)}")
+r2.metric("f1 macro en el test", num(test["f1_macro"]),
+          f"{num(test['f1_macro'] - resumen['piso_test']['f1_macro'])} sobre el piso "
+          f"({num(resumen['piso_test']['f1_macro'])})", delta_color="off")
+r3.metric("alertas correctas", f"{round(test['precision_tsunami'] * 100)} de cada 100",
+          help="Precisión de la clase con marca en el test")
 
 conf = (sismos[sismos["conjunto"] == "test"]
         .assign(real=lambda d: d["tsunami"].map({1: CON, 0: SIN}))
@@ -487,6 +638,7 @@ st.markdown(f"Es un gradient boosting que usa la magnitud, la ubicación, la pro
             f"{miles(test['verdaderos_negativos'] + test['falsas_alarmas'])} sismos sin marca: de cada 100 alertas, "
             f"{round(test['precision_tsunami'] * 100)} son correctas.")
 
+chicos = modelados[(modelados["tsunami"] == 1) & (modelados["mag"] < 6)]
 st.markdown("##### En qué se apoya: la ubicación pesa tanto como la magnitud")
 nombres_col = {"longitude": "longitud", "mag": "magnitud", "latitude": "latitud", "magType": "tipo de magnitud",
                "dist_costa_km": "mar o tierra", "depth": "profundidad"}
@@ -530,7 +682,8 @@ st.markdown(f"**A la izquierda:** si se desordena una columna y el modelo empeor
             "nada. La ubicación no es fuga: las coordenadas se conocen apenas ocurre el sismo y no se calculan con la "
             "marca.  \n"
             f"**A la derecha, por qué pesa el lugar:** los puntos azul oscuro son los {len(chicos)} sismos con marca y "
-            "magnitud menor a 6, y casi todos están en Alaska y la costa oeste, donde la USGS tiene un sistema de alerta "
+            f"magnitud menor a 6, y **{chicos['region'].isin(REGION_ALASKA_OESTE).sum()} de ellos están en Alaska y la "
+            "costa oeste**, donde la USGS tiene un sistema de alerta "
             f"propio con un umbral más bajo. El rectángulo rojo es la regla que encuentra un árbol de sólo tres preguntas "
             f"(f1 {num(exp['arbol']['f1'])}): si la magnitud es mayor a {num(mag_c, 2)}, casi siempre hay marca; si no, "
             f"la hay al norte de {num(lat_c, 1)}° y al oeste de {num(lon_c, 1)}°. El boosting llega a "
