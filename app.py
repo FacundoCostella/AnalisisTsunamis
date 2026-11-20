@@ -28,7 +28,6 @@ GRIS_CLARO, GRIS = "#cfcac3", "#7a7974"          # sin marca · sin marca cargad
 NARANJA, VIOLETA = "#d95926", "#8a5cc2"          # falso negativo · falsa alarma
 MAR, TIERRA = "#1b9e8f", "#b8862b"               # dónde está el epicentro
 NEUTRO = "#4a5560"                               # barras que no son una clase (distribuciones, importancias)
-PROFUNDIDAD = ["#cfe8c4", "#7fbf6a", "#2e7d32"]  # superficial · intermedio · profundo
 
 RESULTADOS = ["acierto: con marca", "falso negativo", "falsa alarma", "acierto: sin marca", "sin marca cargada"]
 ESCALA_RESULTADO = alt.Scale(domain=RESULTADOS, range=[AZUL, NARANJA, VIOLETA, GRIS_CLARO, GRIS])
@@ -485,7 +484,10 @@ texto_sep = barras_sep.mark_text(align="left", dx=5, color="#222", fontSize=12).
 grafico((fondo_sem + barras_sep + texto_sep).properties(width=900, height=230))
 
 # --- La profundidad: lo que la intuición física decía y no se sostuvo
-st.markdown("##### ¿Los sismos con marca son más superficiales?")
+st.markdown("##### La profundidad no distingue: los sismos con marca no son más superficiales")
+st.caption("La hipótesis física decía lo contrario. Cada par de barras compara el mismo tramo de profundidad en los "
+           "dos grupos, sobre el mismo eje: si la hipótesis se sostuviera, la barra azul sería más larga que la gris "
+           "en «superficial» y más corta en las otras dos.")
 sep_prof = separacion(con_marca["depth"], sin_marca["depth"])
 prof = modelados.assign(rango=pd.cut(modelados["depth"], CORTES_PROF, labels=RANGOS_PROF))
 reparto = prof.groupby(["marca", "rango"], observed=True).size().reset_index(name="sismos")
@@ -493,17 +495,25 @@ reparto["parte"] = reparto["sismos"] / reparto.groupby("marca")["sismos"].transf
 reparto["rango"] = reparto["rango"].astype(str)
 reparto["orden"] = reparto["rango"].map({r_: i for i, r_ in enumerate(RANGOS_PROF)})
 sup = reparto[reparto["orden"] == 0].set_index("marca")["parte"]
-barras_p = alt.Chart(reparto).mark_bar().encode(
-    y=alt.Y("marca:N", title=None, sort=[CON, SIN], axis=alt.Axis(labelFontSize=12)),
-    x=alt.X("parte:Q", title="parte de los sismos de cada grupo", axis=alt.Axis(format="%"), stack="normalize"),
-    color=alt.Color("rango:N", title="profundidad", sort=RANGOS_PROF,
-                    scale=alt.Scale(domain=RANGOS_PROF, range=PROFUNDIDAD), legend=alt.Legend(orient="top")),
-    order=alt.Order("orden:Q"),
-    tooltip=["marca:N", "rango:N", "sismos:Q", alt.Tooltip("parte:Q", format=".1%")])
-texto_p = alt.Chart(reparto[reparto["orden"] == 0]).mark_text(align="left", x=8, color="#1f3d1a", fontSize=13,
-                                                             fontWeight="bold").encode(
-    y=alt.Y("marca:N", sort=[CON, SIN]), text=alt.Text("parte:Q", format=".1%"))
-grafico((barras_p + texto_p).properties(width=900, height=150))
+EJE_PROF = alt.Y("rango:N", sort=RANGOS_PROF, title=None,
+                 axis=alt.Axis(labelFontSize=13, labelLimit=240, ticks=False, domain=False))
+PAR_PROF = alt.YOffset("marca:N", sort=[CON, SIN])
+X_PARTE = alt.X("parte:Q", title="parte de los sismos de cada grupo", axis=alt.Axis(format="%"),
+                scale=alt.Scale(domain=[0, 1]))   # dominio fijo: las dos capas comparten la misma escala
+barras_p = alt.Chart(reparto).mark_bar(cornerRadiusEnd=3).encode(
+    y=EJE_PROF, yOffset=PAR_PROF, x=X_PARTE,
+    color=alt.Color("marca:N", sort=[CON, SIN], scale=ESCALA_MARCA, legend=None),
+    tooltip=[alt.Tooltip("marca:N", title="grupo"), alt.Tooltip("rango:N", title="profundidad"),
+             alt.Tooltip("sismos:Q", title="sismos"),
+             alt.Tooltip("parte:Q", title="parte del grupo", format=".1%")])
+texto_p = alt.Chart(reparto).mark_text(align="left", dx=6, color="#222", fontSize=13).encode(
+    y=EJE_PROF, yOffset=PAR_PROF, x=X_PARTE, text=alt.Text("parte:Q", format=".1%"))
+# Rótulos directos dentro del par más largo, en lugar de una leyenda aparte
+rotulos_p = alt.Chart(reparto[reparto["orden"] == 0]).mark_text(align="left", x=8, fontSize=13,
+                                                               fontWeight="bold").encode(
+    y=EJE_PROF, yOffset=PAR_PROF, text=alt.Text("marca:N"),
+    color=alt.condition(alt.datum.marca == CON, alt.value("white"), alt.value("#4a4a46")))
+grafico((barras_p + texto_p + rotulos_p).properties(width=900, height=230))
 st.markdown(f"Un tsunami lo genera un sismo que mueve el fondo del mar, y eso pasa con los sismos superficiales. Por eso "
             f"esperábamos que los sismos con marca fueran más superficiales. **No es así:** {pct(sup[CON], 1)} de los "
             f"sismos con marca tiene menos de 70 km de profundidad, pero también {pct(sup[SIN], 1)} de los sin marca. "
@@ -618,18 +628,33 @@ r2.metric("f1 macro en el test", num(test["f1_macro"]),
 r3.metric("alertas correctas", f"{round(test['precision_tsunami'] * 100)} de cada 100",
           help="Precisión de la clase con marca en el test")
 
+# Matriz de confusión del test: filas = lo que pasó, columnas = lo que dijo el modelo, diagonal = aciertos
 conf = (sismos[sismos["conjunto"] == "test"]
-        .assign(real=lambda d: d["tsunami"].map({1: CON, 0: SIN}))
-        .groupby(["real", "resultado"], as_index=False).size())
-conf["parte"] = conf["size"] / conf.groupby("real")["size"].transform("sum")
-barra_conf = alt.Chart(conf).mark_bar().encode(
-    y=alt.Y("real:N", title="en el test, sismos…", sort=[CON, SIN]),
-    x=alt.X("parte:Q", title=None, axis=alt.Axis(format="%"), stack="normalize"),
-    color=alt.Color("resultado:N", title="qué dijo el modelo", scale=ESCALA_RESULTADO, legend=alt.Legend(orient="top")),
-    order=alt.Order("resultado:N", sort="descending"),
-    tooltip=[alt.Tooltip("resultado:N"), alt.Tooltip("size:Q", title="sismos"),
-             alt.Tooltip("parte:Q", title="parte", format=".1%")])
-grafico(barra_conf.properties(width=900, height=160))
+        .assign(real=lambda d: d["tsunami"].map({1: CON, 0: SIN}),
+                dijo=lambda d: d["alerta"].map({1: "alerta", 0: "sin alerta"}))
+        .groupby(["real", "dijo", "resultado"], as_index=False).size())
+totales_conf = conf.groupby("real")["size"].sum()
+conf["fila"] = [f"{r} · {miles(totales_conf[r])} sismos" for r in conf["real"]]
+conf["caso"] = ["acierto" if r.startswith("acierto") else r for r in conf["resultado"]]
+conf["cuenta"] = conf["size"].map(miles)
+conf["parte"] = conf["size"] / conf["real"].map(totales_conf)
+FILAS_CONF = [f"{c} · {miles(totales_conf[c])} sismos" for c in (CON, SIN)]
+Y_CONF = alt.Y("fila:N", sort=FILAS_CONF, title="de verdad, el sismo…",
+               axis=alt.Axis(labelFontSize=13, labelLimit=260, ticks=False, domain=False))
+X_CONF = alt.X("dijo:N", sort=["alerta", "sin alerta"], title="lo que dijo el modelo",
+               axis=alt.Axis(labelFontSize=13, labelAngle=0, orient="top", ticks=False, domain=False))
+TINTA_CONF = alt.condition(alt.datum.resultado == "acierto: sin marca",   # la única celda de fondo claro
+                           alt.value("#2b2b29"), alt.value("white"))
+celdas_conf = alt.Chart(conf).mark_rect(stroke="white", strokeWidth=3).encode(
+    x=X_CONF, y=Y_CONF,
+    color=alt.Color("resultado:N", scale=ESCALA_RESULTADO, legend=None),   # el color significa lo mismo que en el mapa
+    tooltip=[alt.Tooltip("resultado:N", title="caso"), alt.Tooltip("size:Q", title="sismos"),
+             alt.Tooltip("parte:Q", title="parte de la fila", format=".1%")])
+cuenta_conf = alt.Chart(conf).mark_text(dy=-12, fontSize=26, fontWeight="bold").encode(
+    x=X_CONF, y=Y_CONF, text=alt.Text("cuenta:N"), color=TINTA_CONF)
+caso_conf = alt.Chart(conf).mark_text(dy=18, fontSize=13).encode(
+    x=X_CONF, y=Y_CONF, text=alt.Text("caso:N"), color=TINTA_CONF)
+grafico((celdas_conf + cuenta_conf + caso_conf).properties(width=640, height=260))
 st.markdown(f"Es un gradient boosting que usa la magnitud, la ubicación, la profundidad, el tipo de magnitud y si el "
             f"epicentro está en el mar. Con umbral {num(UMBRAL, 2)}, de los "
             f"{test['aciertos_con_marca'] + test['falsos_negativos']} sismos con marca del test detecta "
