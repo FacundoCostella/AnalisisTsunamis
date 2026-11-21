@@ -116,19 +116,26 @@ def asociacion(x, y):
 
 
 # --- Carga ---------------------------------------------------------------------------------------
+# Cada función recibe la fecha de modificación de su archivo. Streamlit guarda en memoria lo que leyó y lo reutiliza
+# mientras la función y sus argumentos no cambien: sin este argumento, cuando build_app.py (o un git pull en Streamlit
+# Cloud) reemplaza el archivo, la app sigue usando la copia vieja. Con la fecha como argumento, la vuelve a leer.
+def modificado(archivo):
+    return (APP_DATA / archivo).stat().st_mtime
+
+
 @st.cache_data
-def cargar_sismos():
+def cargar_sismos(fecha_archivo):
     return pd.read_csv(APP_DATA / "sismos_app.csv")
 
 
 @st.cache_data
-def cargar_resumen():
+def cargar_resumen(fecha_archivo):
     with open(APP_DATA / "resumen.json", encoding="utf-8") as f:
         return json.load(f)
 
 
 @st.cache_resource
-def cargar_modelo():
+def cargar_modelo(fecha_archivo):
     return joblib.load(APP_DATA / "modelo.joblib")
 
 
@@ -138,9 +145,9 @@ if not (APP_DATA / "sismos_app.csv").exists():
     st.error("Faltan los datos de la aplicación: correr primero `python build_app.py`.")
     st.stop()
 
-sismos = cargar_sismos().round({"latitude": 2, "longitude": 2, "depth": 1})   # menos decimales = página más liviana
-resumen = cargar_resumen()
-guardado = cargar_modelo()
+sismos = cargar_sismos(modificado("sismos_app.csv")).round({"latitude": 2, "longitude": 2, "depth": 1})   # menos decimales = página más liviana
+resumen = cargar_resumen(modificado("resumen.json"))
+guardado = cargar_modelo(modificado("modelo.joblib"))
 exp = resumen["experimentos"]
 UMBRAL = guardado["umbral"]
 modelados = sismos[sismos["conjunto"] != "sin marca cargada"].copy()   # los que usa el modelo (hasta marzo de 2026)
