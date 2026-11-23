@@ -5,7 +5,8 @@ Uso:
     python build_app.py --datos ruta/a/sismos_master.csv # usa una salida nueva del pipeline
     python build_app.py --rapido                         # sin repetir los experimentos (sólo el modelo)
 
-Hace lo mismo que el notebook de la Entrega 3, con la misma semilla:
+Hace lo mismo que el notebook de la Entrega 3, con la misma semilla. La métrica es el F1 de la clase con alerta
+(tsunami = 1):
   1. lee los sismos y corta en CORTE (las marcas desde abril de 2026 todavía no están cargadas);
   2. separa entrenamiento y test por grupo (un pliegue de StratifiedGroupKFold, 20 %);
   3. entrena el modelo elegido con los hiperparámetros ajustados;
@@ -51,7 +52,7 @@ def resultado(real, alerta):
 
 def metricas(y, proba, umbral):
     pred = (proba >= umbral).astype(int)
-    return {"f1_macro": f1_score(y, pred, average="macro"),
+    return {"f1": f1_score(y, pred),          # F1 de la clase con alerta (tsunami = 1)
             "recall_tsunami": pred[y == 1].mean(),
             "precision_tsunami": y[pred == 1].mean() if pred.sum() else 0.0,
             "pr_auc": average_precision_score(y, proba),
@@ -65,8 +66,8 @@ def experimentos(datos, X_train, y_train, g_train, cv, modelo, X_test, y_test, p
         X_ = X_train if X_ is None else X_
         y_ = y_train if y_ is None else y_
         r = cross_validate(pipeline, X_, y_, groups=g_train if con_grupos else None, cv=validacion_,
-                           scoring=["f1_macro", "average_precision"], n_jobs=-1)
-        return {"f1": r["test_f1_macro"].mean(), "desvio": r["test_f1_macro"].std(),
+                           scoring=["f1", "average_precision"], n_jobs=-1)
+        return {"f1": r["test_f1"].mean(), "desvio": r["test_f1"].std(),
                 "pr_auc": r["test_average_precision"].mean()}
 
     def boosting():
@@ -119,11 +120,11 @@ def experimentos(datos, X_train, y_train, g_train, cv, modelo, X_test, y_test, p
     curva = []
     for u in np.round(np.arange(0.05, 0.951, 0.01), 2):
         m = metricas(y_train.to_numpy(), proba_cv, u)
-        curva.append({"umbral": float(u), "f1 macro": m["f1_macro"], "recall": m["recall_tsunami"],
+        curva.append({"umbral": float(u), "F1": m["f1"], "recall": m["recall_tsunami"],
                       "precisión": m["precision_tsunami"]})
 
     columnas_modelo = NUMERICAS + CATEGORICAS + ["dist_costa_km"]
-    imp = permutation_importance(modelo, X_test[columnas_modelo], y_test, scoring="f1_macro",
+    imp = permutation_importance(modelo, X_test[columnas_modelo], y_test, scoring="f1",
                                  n_repeats=10, random_state=SEMILLA, n_jobs=-1)
     importancia = [{"columna": c, "caida": float(m), "desvio": float(s)}
                    for c, m, s in zip(columnas_modelo, imp.importances_mean, imp.importances_std)]
@@ -246,7 +247,7 @@ def main():
         "test": {**metricas(y_te, proba_test, UMBRAL),
                  "verdaderos_negativos": int(tn), "falsas_alarmas": int(fp),
                  "falsos_negativos": int(fn), "aciertos_con_marca": int(tp)},
-        "piso_test": {"f1_macro": f1_score(y_te, np.zeros_like(y_te), average="macro"),
+        "piso_test": {"f1": f1_score(y_te, np.zeros_like(y_te), zero_division=0),
                       "pr_auc": float(y_te.mean())},
         # Rangos de lo que vio el modelo: "Probá el modelo" no deja cargar valores fuera de esto
         "rangos": {c: [float(X_train[c].min()), float(X_train[c].max())]
@@ -263,8 +264,8 @@ def main():
 
     vc, te = resumen["validacion_cruzada"], resumen["test"]
     print(f"Sismos: {len(df)} | modelados: {len(datos)} | sin marca cargada: {len(sin_marca)}")
-    print(f"Validación cruzada (umbral {UMBRAL}): f1 macro {vc['f1_macro']:.3f} · recall {vc['recall_tsunami']:.3f}")
-    print(f"Test (umbral {UMBRAL}): f1 macro {te['f1_macro']:.3f} · recall {te['recall_tsunami']:.3f} · "
+    print(f"Validación cruzada (umbral {UMBRAL}): F1 {vc['f1']:.3f} · recall {vc['recall_tsunami']:.3f}")
+    print(f"Test (umbral {UMBRAL}): F1 {te['f1']:.3f} · recall {te['recall_tsunami']:.3f} · "
           f"precision {te['precision_tsunami']:.3f} · FN {fn} · FP {fp}")
     print(f"Archivos guardados en {salida}/")
 

@@ -93,6 +93,20 @@ def grafico(chart):
     st.altair_chart(chart, theme=None)
 
 
+def tarjeta_kpi(col, valor, descripcion):
+    """Un número grande con su explicación debajo (los resultados de «Probá el modelo»)."""
+    col.markdown(f"<div style='background-color:rgba(127,127,127,0.08); border-radius:8px; padding:1rem 1.15rem; "
+                 f"height:100%'><div style='color:{AZUL}; font-size:2.1rem; font-weight:800; line-height:1.1; "
+                 f"margin-bottom:0.4rem'>{valor}</div><div style='opacity:0.8; font-size:0.9rem; line-height:1.35'>"
+                 f"{descripcion}</div></div>", unsafe_allow_html=True)
+
+
+def _nombre_principal(serie):
+    """La región que más se repite en una zona (para el nombre que muestra el mapa de «Probá el modelo»)."""
+    moda = serie.dropna().mode()
+    return moda.iloc[0] if len(moda) else "Océano"
+
+
 # --- Las funciones de la cátedra (Entrega 2) ----------------------------------------------------
 CORTES_SEMAFORO = {"separacion": (0.2, 0.8), "correlacion": (0.2, 0.6)}
 
@@ -169,6 +183,35 @@ if guardado.get("version_sklearn") != sklearn.__version__:
 st.caption("Ciencia de Datos · UTN FRM · 2026 · Proyecto Integrador · Grupo 9 · Comisión 5K09")
 st.title("¿Qué características de un sismo permiten estimar si está asociado a un tsunami?")
 
+# La respuesta a la pregunta, en un párrafo y con letra más grande que el resto
+st.markdown(
+    "<div style='font-size:1.2rem; line-height:1.6; margin-bottom:1rem'>"
+    "<b>Con nuestros datos, la pregunta no se puede responder tal como la planteamos.</b> El catálogo de la USGS no "
+    "registra qué sismos generaron un tsunami: la columna <code>tsunami</code> es la alerta que la USGS emite cuando un "
+    "sismo cumple su criterio. Lo más cerca que pudimos llegar es estimar qué sismos reciben esa alerta."
+    "</div>", unsafe_allow_html=True)
+
+# Tres números del test que sostienen la respuesta (salen de resumen.json)
+alertas_test = test["aciertos_con_marca"] + test["falsas_alarmas"]
+con_marca_test = test["aciertos_con_marca"] + test["falsos_negativos"]
+umbral_txt = num(resumen["umbral"], 2)
+numeros_portada = [
+    (num(test["f1"], 2), AZUL,
+     f"F1 en el test (clase con marca), contra {num(resumen['piso_test']['f1'], 2)} del piso que dice siempre "
+     "«sin marca»"),
+    (pct(test["recall_tsunami"]), AZUL,
+     f"de los {con_marca_test} sismos con marca del test detectados ({test['aciertos_con_marca']} aciertos, "
+     f"umbral {umbral_txt})"),
+    (str(test["falsas_alarmas"]), VIOLETA,
+     f"falsas alarmas entre las {alertas_test} alertas del test (1 de cada "
+     f"{round(alertas_test / test['falsas_alarmas'])}). Es el precio de bajar el umbral a {umbral_txt} para no "
+     "perder sismos con marca"),
+]
+for col, (valor, color, texto) in zip(st.columns(3), numeros_portada):
+    col.markdown(f"<div style='font-size:2.6rem; font-weight:700; line-height:1.1; color:{color}'>{valor}</div>"
+                 f"<div style='color:{GRIS}; line-height:1.4; margin-bottom:1rem'>{texto}</div>",
+                 unsafe_allow_html=True)
+
 st.header("De qué se trata")
 st.markdown(f"""
 Un **tsunami** es una serie de olas que se forma cuando un sismo grande mueve de golpe el fondo del mar. No todo sismo
@@ -208,24 +251,30 @@ st.subheader(f"De {miles(n_total)} sismos fuertes registrados desde 2019, sólo 
 
 clases = pd.DataFrame({"marca": [CON, SIN], "sismos": [n_marca, n_total - n_marca], "orden": [0, 1]})
 clases["parte"] = clases["sismos"] / n_total
-dona = alt.Chart(clases).mark_arc(innerRadius=100, outerRadius=155, stroke="white", strokeWidth=2).encode(
-    theta=alt.Theta("sismos:Q", stack=True), order=alt.Order("orden:Q"),
+clases["numero"] = [pct(n_marca / n_total, 1), ""]   # sólo la fila con marca lleva texto (si no, se escribe dos veces)
+clases["texto"] = [CON, ""]
+# La dona se gira para que la porción con marca quede arriba, centrada, y la etiqueta va en el centro del círculo.
+# La etiqueta se ubica con theta y radio 0 (no con x e y fijos), así queda en el centro aunque cambie el ancho.
+inicio = -np.pi * n_marca / n_total
+base_dona = alt.Chart(clases).encode(
+    theta=alt.Theta("sismos:Q", stack=True, scale=alt.Scale(range=[inicio, inicio + 2 * np.pi])),
+    order=alt.Order("orden:Q"))
+dona = base_dona.mark_arc(innerRadius=100, outerRadius=155, stroke="white", strokeWidth=2).encode(
     color=alt.Color("marca:N", scale=ESCALA_MARCA, legend=None),
     tooltip=[alt.Tooltip("marca:N", title=" "), alt.Tooltip("sismos:Q"), alt.Tooltip("parte:Q", format=".1%")])
-centro_num = alt.Chart(pd.DataFrame({"t": [pct(n_marca / n_total, 1)]})).mark_text(
-    x=170, y=158, fontSize=38, fontWeight="bold", color=AZUL).encode(text="t:N")
-centro_txt = alt.Chart(pd.DataFrame({"t": ["con marca de la USGS"]})).mark_text(
-    x=170, y=192, fontSize=13, color="#444").encode(text="t:N")
+etiqueta_num = base_dona.mark_text(radius=0, dy=-12, fontSize=38, fontWeight="bold", color=AZUL).encode(text="numero:N")
+etiqueta_txt = base_dona.mark_text(radius=0, dy=22, fontSize=13, color="#444").encode(text="texto:N")
 k1, k2 = st.columns([1, 1.25])
 with k1:
-    grafico((dona + centro_num + centro_txt).properties(width=340, height=340))
+    grafico((dona + etiqueta_num + etiqueta_txt).properties(width=340, height=340))
 with k2:
     st.metric(f"sismos {CON}", miles(n_marca), pct(n_marca / n_total, 1), delta_color="off")
     st.metric(f"sismos {SIN}", miles(n_total - n_marca), pct(1 - n_marca / n_total, 1), delta_color="off")
     st.markdown(f"Cada fila es un sismo de magnitud 5 o más del catálogo de la USGS, y la columna `tsunami` dice si "
                 f"tiene la marca. **La diferencia es enorme**: un modelo que diga siempre «sin marca» acierta el "
                 f"{pct(1 - n_marca / n_total)} sin aprender nada. Por eso la accuracy no sirve para medir el modelo, y "
-                "se usa el f1 macro, que le da el mismo peso a la clase chica.")
+                "se usa el **F1 de la clase con marca**: combina cuántos sismos con marca encuentra el modelo y cuántas "
+                "de sus alertas son correctas. Decir siempre «sin marca» da un F1 de 0.")
 
 d1, d2, d3, d4 = st.columns(4)
 d1.metric("columnas", resumen["datos"]["columnas"])
@@ -415,7 +464,7 @@ los números se puedan reproducir.
 {num(sep_sig, 2)}, zona {semaforo(sep_sig)}), pero porque la USGS lo calcula **usando la alerta de tsunami**: contiene la
 respuesta. El número solo no lo delataba: su correlación con la marca es apenas
 {num(modelados['tsunami'].corr(modelados['sig']), 2)}, y es casi una copia de la magnitud (Spearman {num(s_ms, 2)}). La
-fuga se detecta leyendo cómo se construye la columna. En el modelo la medimos igual: con `sig` el f1 da
+fuga se detecta leyendo cómo se construye la columna. En el modelo la medimos igual: con `sig` el F1 da
 {num(con_sig['f1'])} y sin ella {num(base_['f1'])}; sale por cómo se construye, no por el número.
 
 **Las demás columnas que salen:** `id`, `place` y `time` son identificadores (`time` sólo arma los grupos de
@@ -629,9 +678,9 @@ r1, r2, r3 = st.columns(3)
 r1.metric("sismos con marca detectados en el test",
           f"{test['aciertos_con_marca']} de {test['aciertos_con_marca'] + test['falsos_negativos']}",
           help=f"Recall de la clase con marca, con umbral {num(UMBRAL, 2)}")
-r2.metric("f1 macro en el test", num(test["f1_macro"]),
-          f"{num(test['f1_macro'] - resumen['piso_test']['f1_macro'])} sobre el piso "
-          f"({num(resumen['piso_test']['f1_macro'])})", delta_color="off")
+r2.metric("F1 en el test", num(test["f1"]),
+          f"el piso (siempre «sin marca») da {num(resumen['piso_test']['f1'])}", delta_color="off",
+          help="F1 de la clase con marca: combina el recall y la precisión de esa clase")
 r3.metric("alertas correctas", f"{round(test['precision_tsunami'] * 100)} de cada 100",
           help="Precisión de la clase con marca en el test")
 
@@ -680,7 +729,7 @@ imp["bajo"], imp["alto"] = imp["caida"] - imp["desvio"], imp["caida"] + imp["des
 orden_imp = imp.sort_values("caida", ascending=False)["columna"].tolist()
 barras_i = alt.Chart(imp).mark_bar(color=NEUTRO).encode(
     y=alt.Y("columna:N", sort=orden_imp, title=None),
-    x=alt.X("caida:Q", title="cuánto cae el f1 macro al desordenarla"),
+    x=alt.X("caida:Q", title="cuánto cae el F1 al desordenarla"),
     tooltip=["columna:N", alt.Tooltip("caida:Q", format=".3f"), alt.Tooltip("desvio:Q", format=".3f")])
 bigotes_i = alt.Chart(imp).mark_rule(color="#222").encode(y=alt.Y("columna:N", sort=orden_imp), x="bajo:Q", x2="alto:Q")
 
@@ -717,7 +766,7 @@ st.markdown(f"**A la izquierda:** si se desordena una columna y el modelo empeor
             f"magnitud menor a 6, y **{chicos['region'].isin(REGION_ALASKA_OESTE).sum()} de ellos están en Alaska y la "
             "costa oeste**, donde la USGS tiene un sistema de alerta "
             f"propio con un umbral más bajo. El rectángulo rojo es la regla que encuentra un árbol de sólo tres preguntas "
-            f"(f1 {num(exp['arbol']['f1'])}): si la magnitud es mayor a {num(mag_c, 2)}, casi siempre hay marca; si no, "
+            f"(F1 {num(exp['arbol']['f1'])}): si la magnitud es mayor a {num(mag_c, 2)}, casi siempre hay marca; si no, "
             f"la hay al norte de {num(lat_c, 1)}° y al oeste de {num(lon_c, 1)}°. El boosting llega a "
             f"{num(f1_elegido)} combinando muchos cortes de este tipo.")
 
@@ -744,12 +793,19 @@ with st.expander("Cómo lo sabemos"):
     piso = comparacion.loc[comparacion["modelo"] == "Piso: siempre «sin marca»", "f1"].iloc[0]
     ablacion = {a["variante"]: a for a in exp["ablacion"]}
     base_f1, base_desvio = ablacion["base"]["f1"], ablacion["base"]["desvio"]
+    f1_02_05 = [c["F1"] for c in exp["curva_umbral"] if 0.2 <= c["umbral"] <= 0.5]
     st.markdown(f"""
-**La métrica: f1 macro**, declarada antes de comparar modelos. Promedia el f1 de las dos clases, así que la marca (4 %)
-pesa lo mismo que el resto. El error caro es el falso negativo (un sismo con potencial de tsunami que no se marca); una
-falsa alarma cuesta menos.
+**La métrica: el F1 de la clase con marca.** Combina la **precisión** (de las alertas que da el modelo, cuántas son
+correctas) y el **recall** (de los sismos con marca, cuántos encuentra): sólo es alto si las dos lo son. Mira únicamente la
+clase que interesa, así que los aciertos en los sismos sin marca, que son casi todos, no lo inflan. El error caro es el
+falso negativo (un sismo con alerta que el modelo no detecta); una falsa alarma cuesta menos.
 
-**El piso:** {num(piso)}, un `DummyClassifier` que dice siempre «sin marca».
+**El piso:** {num(piso)}. Un `DummyClassifier` que dice siempre «sin marca» acierta el 96 % de los sismos, pero no
+encuentra ninguno con marca.
+
+**Sobre el cambio de métrica.** En la Entrega 3 las decisiones se tomaron con el f1 macro (el promedio del F1 de las dos
+clases). Repetidas con el F1 de la clase con marca, no cambia ninguna: el mismo modelo, los mismos hiperparámetros y el
+mismo umbral.
 
 **La validación.** Un sismo grande trae réplicas en el mismo lugar durante días: si una réplica queda en entrenamiento y
 otra en validación, el modelo «reconoce» la secuencia y el número sale inflado. Por eso los pedazos se arman con
@@ -763,7 +819,7 @@ separó con el mismo criterio y se miró una sola vez. ¿Importa cómo se arman 
     st.markdown("Dan lo mismo, siempre dentro del desvío: **las réplicas no inflan el número**, porque son casi todas "
                 "chicas y sin marca. Igual nos quedamos con la validación por grupo, porque imita el uso real.")
 
-    st.markdown("**La comparación de modelos** (f1 macro en validación cruzada, media ± desvío):")
+    st.markdown("**La comparación de modelos** (F1 en validación cruzada, media ± desvío):")
     modelos = comparacion[~comparacion["modelo"].str.startswith("Piso")].copy()
     modelos["bajo"], modelos["alto"] = modelos["f1"] - modelos["desvio"], modelos["f1"] + modelos["desvio"]
     modelos["elegido"] = np.where(modelos["modelo"].str.contains("elegido"), "elegido", "probado")
@@ -773,7 +829,7 @@ separó con el mismo criterio y se miró una sola vez. ¿Importa cómo se arman 
                               legend=None)
     eje_m = alt.Y("modelo:N", sort=orden_modelos, title=None)
     bigotes = alt.Chart(modelos).mark_rule(strokeWidth=2).encode(
-        x=alt.X("bajo:Q", title="f1 macro", scale=alt.Scale(domain=[0.45, 0.95])), x2="alto:Q", color=color_elegido,
+        x=alt.X("bajo:Q", title="F1", scale=alt.Scale(domain=[0, 0.9])), x2="alto:Q", color=color_elegido,
         y=eje_m)
     puntos_m = alt.Chart(modelos).mark_circle(size=110).encode(x="f1:Q", color=color_elegido, y=eje_m,
                                                                tooltip=["modelo:N", "texto:N"])
@@ -798,11 +854,12 @@ balanceo de clases). Ganó tasa {num(resumen['hiperparametros']['learning_rate']
 ({num(f1_elegido)}). Balancear las clases empató con el mejor y fue menos estable.
 
 **El umbral.** El modelo da una probabilidad, y el umbral decide a partir de cuánto eso es «alerta». En la Entrega 3
-usamos 0,5; la corrección fue bajarlo. Como el f1 es casi plano entre 0,2 y 0,5, se eligió el umbral más bajo con el f1
-máximo, {num(UMBRAL, 2)}, para no perder sismos marcados. Se eligió con validación cruzada, sin mirar el test:
+usamos 0,5; la corrección fue bajarlo. El F1 es casi plano entre 0,2 y 0,5 (de {num(min(f1_02_05))} a
+{num(max(f1_02_05))}, una diferencia menor que el desvío), así que bajar el umbral no empeora la métrica y deja de perder
+sismos marcados. Se eligió {num(UMBRAL, 2)}, el umbral con el F1 más alto, con validación cruzada y sin mirar el test:
 """)
     curva = pd.DataFrame(exp["curva_umbral"]).melt(id_vars="umbral", var_name="medida", value_name="valor")
-    medidas = ["recall", "precisión", "f1 macro"]
+    medidas = ["recall", "precisión", "F1"]
     lineas_u = alt.Chart(curva).mark_line(strokeWidth=2.5).encode(
         x=alt.X("umbral:Q", title="umbral"),
         y=alt.Y("valor:Q", title="validación cruzada", scale=alt.Scale(domain=[0, 1])),
@@ -820,8 +877,8 @@ máximo, {num(UMBRAL, 2)}, para no perder sismos marcados. Se eligió con valida
 En validación cruzada el recall sube de {pct(vc05['recall_tsunami'], 1)} a {pct(vc['recall_tsunami'], 1)} y la precisión
 baja de {pct(vc05['precision_tsunami'], 1)} a {pct(vc['precision_tsunami'], 1)}.
 
-**El test, una sola vez** (umbral {num(UMBRAL, 2)}): f1 macro {num(test['f1_macro'])} (validación cruzada:
-{num(vc['f1_macro'])}), recall {pct(test['recall_tsunami'])}, precisión {pct(test['precision_tsunami'])}, PR-AUC
+**El test, una sola vez** (umbral {num(UMBRAL, 2)}): F1 {num(test['f1'])} (validación cruzada:
+{num(vc['f1'])}), recall {pct(test['recall_tsunami'])}, precisión {pct(test['precision_tsunami'])}, PR-AUC
 {num(test['pr_auc'], 2)} contra {num(resumen['piso_test']['pr_auc'], 2)} del piso.
 
 **Lo que probamos y no anduvo** (la ablación: el modelo base contra el mismo modelo agregando o sacando una columna por
@@ -834,7 +891,7 @@ vez; la franja gris es ± un desvío del base, y lo que cae adentro es un empate
         color="#e8e6e1").encode(x="a:Q", x2="b:Q")
     barras_a = alt.Chart(abl).mark_bar().encode(
         y=alt.Y("variante:N", sort=abl.sort_values("diferencia")["variante"].tolist(), title=None),
-        x=alt.X("diferencia:Q", title="diferencia de f1 macro con el modelo base"),
+        x=alt.X("diferencia:Q", title="diferencia de F1 con el modelo base"),
         color=alt.Color("lectura:N", title=None, legend=alt.Legend(orient="top"),
                         scale=alt.Scale(domain=["supera el desvío", "empate"], range=[NEUTRO, "#b9b6b0"])),
         tooltip=["variante:N", alt.Tooltip("f1:Q", format=".3f"), alt.Tooltip("diferencia:Q", format="+.3f")])
@@ -864,134 +921,531 @@ st.divider()
 
 
 # =================================================================================================
-# COPA · EXPLORÁ
+# COPA · EXPLORÁ (EJES + MAPA DE CALOR + CLIC A LA UBICACIÓN)
 # =================================================================================================
-st.header("Tu turno · Explorá")
-recientes = sismos[sismos["conjunto"] == "sin marca cargada"]
-grandes_recientes = recientes[recientes["mag"] >= 7.2]
-st.markdown("Todos los sismos, con lo que dijo el modelo de cada uno. Cada sismo lo predice un modelo que no lo vio: "
-            "en el entrenamiento, la predicción sale de la validación cruzada. **Arrastrá el mouse sobre el histograma** "
-            "para elegir un rango de magnitud, hacé clic en la leyenda para resaltar un resultado y pasá el mouse por "
-            "un sismo para ver el detalle.")
-st.markdown(f"En gris oscuro están los {miles(len(recientes))} sismos que la USGS todavía no marcó. El modelo da alerta en "
-            f"{int(recientes['alerta'].sum())}, entre ellos {'los' if len(grandes_recientes) > 1 else 'el'} "
-            f"{len(grandes_recientes)} de magnitud 7,2 o más "
-            f"({', '.join(f'{r.region} {num(r.mag, 1)}' for r in grandes_recientes.itertuples())}). Cuando la USGS "
-            "cargue esas marcas, van a servir para comprobar al modelo con datos que nunca vio.")
+OPCION_CERO = "— armarlo desde cero —"   # la primera opción de «Partir de un sismo real», en «Probá el modelo»
+ROJO = "#e3242b"                          # tu sismo, el umbral y la caja del árbol (no es una clase)
+fondo_recortado = alt.Chart(MUNDO).mark_geoshape(fill="#eeeeee", stroke="white", strokeWidth=0.5, clip=True)
 
-f_1, f_2 = st.columns(2)
-que_mostrar = f_1.multiselect("Qué dijo el modelo", RESULTADOS, default=RESULTADOS)
-region = f_2.selectbox("Región", ["todas"] + sorted(sismos["region"].dropna().unique()))
-vista = sismos[sismos["resultado"].isin(que_mostrar)]
-if region != "todas":
-    vista = vista[vista["region"] == region]
-vista = vista.assign(marca_real=vista["tsunami"].map({1: "sí", 0: "no"}).where(vista["conjunto"] != "sin marca cargada",
-                                                                               "todavía no cargada"))
-vista = vista[["longitude", "latitude", "mag", "resultado", "probabilidad", "place", "time", "magType", "depth",
-               "en_el_mar", "marca_real", "conjunto"]]
 
-rango = alt.selection_interval(encodings=["x"])
-resaltar = alt.selection_point(fields=["resultado"], bind="legend")
-color_res = alt.Color("resultado:N", title="qué dijo el modelo", scale=ESCALA_RESULTADO,
-                      legend=alt.Legend(orient="top"))
-puntos_copa = alt.Chart(vista).mark_circle().encode(
-    longitude="longitude:Q", latitude="latitude:Q", color=color_res,
-    size=alt.Size("mag:Q", title="magnitud", scale=alt.Scale(domain=[5, 9], range=[6, 260]), legend=None),
-    opacity=alt.condition(resaltar, alt.value(0.85), alt.value(0.05)),
-    order=alt.Order("probabilidad:Q"),
-    tooltip=[alt.Tooltip("place:N", title="lugar"), alt.Tooltip("time:N", title="fecha (UTC)"),
-             alt.Tooltip("mag:Q", title="magnitud"), alt.Tooltip("magType:N", title="tipo de magnitud"),
-             alt.Tooltip("depth:Q", title="profundidad (km)"), alt.Tooltip("en_el_mar:N", title="mar o tierra"),
-             alt.Tooltip("marca_real:N", title="marca de la USGS"),
-             alt.Tooltip("probabilidad:Q", title="probabilidad según el modelo", format=".0%"),
-             alt.Tooltip("resultado:N", title="resultado"), alt.Tooltip("conjunto:N", title="conjunto")],
-).add_params(resaltar).transform_filter(rango)
-mapa_copa = alt.layer(fondo, puntos_copa).project(type="equirectangular").properties(width=640, height=330)
-histograma = alt.Chart(vista).mark_bar().encode(
-    x=alt.X("mag:Q", bin=alt.Bin(step=0.1), title="magnitud (arrastrá para elegir un rango)"),
-    y=alt.Y("count():Q", title="sismos", scale=alt.Scale(type="symlog")),
-    color=color_res, tooltip=[alt.Tooltip("count():Q", title="sismos"), "resultado:N"],
-).add_params(rango).properties(width=300, height=330)
-grafico(alt.hconcat(mapa_copa, histograma))
-st.caption(f"{miles(len(vista))} sismos con los filtros de arriba (el rango del histograma filtra sólo el mapa). "
-           f"Alerta = probabilidad de {num(UMBRAL, 2)} o más. El eje del histograma está en escala logarítmica, para "
-           "que se vean los sismos grandes, que son pocos.")
+def mapa(capas, encuadre=None, centro_lon=0.0, alto=300):
+    """Las capas sobre el mapamundi, en proyección equirectangular.
 
+    `encuadre` = (lon_min, lat_min, lon_max, lat_max) es la zona que tiene que entrar en el gráfico (por defecto, el mundo
+    sin la Antártida). La proyección se gira para que `centro_lon` quede en el medio: así el zoom funciona igual cerca
+    de la línea de cambio de fecha (Fiyi, Tonga, Aleutianas). Lo que queda afuera del encuadre se recorta.
+    """
+    lon0, lat0, lon1, lat1 = encuadre or (-179.9, -60, 179.9, 80)
+    lat0, lat1 = max(lat0, -89.9), min(lat1, 89.9)
+    caja_geo = {"type": "Feature", "properties": {},
+                "geometry": {"type": "MultiPoint", "coordinates": [[lon0, lat0], [lon1, lat0], [lon1, lat1], [lon0, lat1]]}}
+    return (alt.layer(fondo_recortado, *capas)
+            .project(type="equirectangular", rotate=[-centro_lon, 0, 0], fit=caja_geo)
+            .properties(height=alto))
+
+
+def elegido_en(evento, seleccion, campo):
+    """El valor de `campo` del punto que el usuario tocó en un gráfico de Altair con on_select (None si no tocó nada)."""
+    try:
+        puntos = evento["selection"][seleccion]
+    except (KeyError, TypeError):
+        return None
+    if isinstance(puntos, list) and puntos and isinstance(puntos[0], dict):
+        return puntos[0].get(campo)
+    return None
+
+
+def seccion_explora():
+    st.header("Tu turno · Explorá")
+    st.markdown("Cada punto es un sismo, con el color de lo que dijo el modelo. **Hacé clic en cualquier punto** para "
+                "ver toda su información y saltar directo a su ubicación en el mapa.")
+    recientes = sismos[sismos["conjunto"] == "sin marca cargada"]
+    grandes_recientes = recientes[recientes["mag"] >= 7.2]
+    st.markdown(f"En gris oscuro están los {miles(len(recientes))} sismos que la USGS todavía no marcó. El modelo da "
+                f"alerta en {int(recientes['alerta'].sum())}, entre ellos {'los' if len(grandes_recientes) > 1 else 'el'} "
+                f"{len(grandes_recientes)} de magnitud 7,2 o más "
+                f"({', '.join(f'{r.region} {num(r.mag, 1)}' for r in grandes_recientes.itertuples())}). Cuando la USGS "
+                "cargue esas marcas, van a servir para comprobar al modelo con datos que nunca vio.")
+
+    if "explora_sismo_id" not in st.session_state:
+        st.session_state["explora_sismo_id"] = None
+
+    # 1. Enfoques rápidos
+    opciones_enfoque = [
+        "Aciertos con marca y errores",
+        "Sólo aciertos con marca",
+        "Sólo errores del modelo",
+        "Sismos 2026 sin marca cargada",
+        "Todos los sismos (catálogo completo)",
+    ]
+    if hasattr(st, "segmented_control"):
+        enfoque = st.segmented_control("¿Qué querés inspeccionar?", opciones_enfoque, default=opciones_enfoque[0])
+        if not enfoque:
+            enfoque = opciones_enfoque[0]
+    else:
+        enfoque = st.radio("¿Qué querés inspeccionar?", opciones_enfoque, horizontal=True)
+
+    # 2. Filtros + selector de eje Y
+    ejes_y = {
+        "Profundidad (km)": ("depth", "Profundidad (km)"),
+        "Probabilidad del modelo (%)": ("prob_pct_num", "Probabilidad según el modelo (%)"),
+        "Distancia a la costa (km)": ("dist_costa_km", "Distancia a la costa (+ mar / − tierra, km)"),
+    }
+    c1, c2, c3, c4 = st.columns([1.25, 1.25, 1.15, 0.95])
+    eje_y_nombre = c1.selectbox("Eje vertical (Y)", list(ejes_y.keys()))
+    mag_min, mag_max = c2.slider("Rango de magnitud (eje X)", 5.0, 9.0, (5.0, 9.0), step=0.1, format="%.1f")
+    region = c3.selectbox("Región", ["Todas"] + sorted(sismos["region"].dropna().unique()))
+    epicentro = c4.radio("Epicentro", ["Todos", "mar", "tierra"], horizontal=True)
+
+    col_y, titulo_y = ejes_y[eje_y_nombre]
+
+    # Aplicación de filtros
+    vista = sismos[(sismos["mag"] >= mag_min) & (sismos["mag"] <= mag_max)].copy()
+    if enfoque == "Aciertos con marca y errores":
+        vista = vista[vista["resultado"].isin(["acierto: con marca", "falso negativo", "falsa alarma"])]
+    elif enfoque == "Sólo aciertos con marca":
+        vista = vista[vista["resultado"] == "acierto: con marca"]
+    elif enfoque == "Sólo errores del modelo":
+        vista = vista[vista["resultado"].isin(["falso negativo", "falsa alarma"])]
+    elif enfoque == "Sismos 2026 sin marca cargada":
+        vista = vista[vista["conjunto"] == "sin marca cargada"]
+
+    if region != "Todas":
+        vista = vista[vista["region"] == region]
+    if epicentro != "Todos":
+        vista = vista[vista["en_el_mar"] == epicentro]
+
+    if len(vista) == 0:
+        st.info("No hay sismos que cumplan con esta combinación de filtros. Probá ampliar el rango de magnitud o "
+                "cambiar el enfoque.")
+        return
+
+    vista["marca_real"] = vista["tsunami"].map({1: "Sí", 0: "No"}).where(
+        vista["conjunto"] != "sin marca cargada", "Todavía no cargada"
+    )
+    vista["prob_pct_num"] = (vista["probabilidad"] * 100).round(1)
+    vista["prob_txt"] = (vista["probabilidad"] * 100).round(0).astype(int).astype(str) + " %"
+    vista["fecha"] = vista["time"].str.slice(0, 16).str.replace("T", " ")
+
+    # 3. Números que siguen a los filtros
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Sismos filtrados", miles(len(vista)))
+    k2.metric("Con marca USGS", miles(int((vista["marca_real"] == "Sí").sum())))
+    k3.metric("Alertas del modelo", miles(int(vista["alerta"].sum())), help=f"Probabilidad ≥ {num(UMBRAL, 2)}")
+    k4.metric("Magnitud máxima", num(vista["mag"].max(), 1))
+
+    # El sismo elegido (si sigue dentro de los filtros)
+    fila = None
+    id_sel = st.session_state["explora_sismo_id"]
+    if id_sel is not None:
+        match = vista[vista["id"].astype(str) == str(id_sel)]
+        if not match.empty:
+            fila = match.iloc[0]
+
+    # 4. Dos columnas: izquierda = gráfico de ejes; derecha = ficha + ubicación
+    col_graf, col_ubic = st.columns([1.45, 1.0])
+
+    with col_graf:
+        eje_x = alt.X("mag:Q", title="Magnitud del sismo", scale=alt.Scale(zero=False))
+        eje_y = alt.Y(f"{col_y}:Q", title=titulo_y)
+        capas = []
+
+        # Un punto por sismo, con el color de lo que dijo el modelo (si hay más de 2.500 grises «sin marca»,
+        # se muestrean sólo esos; los errores y los aciertos con marca van todos)
+        muestreo_grises = False
+        orden_capas = ["acierto: sin marca", "sin marca cargada", "falsa alarma", "acierto: con marca", "falso negativo"]
+        partes = []
+        for i, res in enumerate(orden_capas):
+            sub = vista[vista["resultado"] == res]
+            if res == "acierto: sin marca" and len(sub) > 2500:
+                sub = sub.sample(2500, random_state=42)
+                muestreo_grises = True
+            partes.append(sub.assign(capa=i))
+        de_puntos = pd.concat(partes)
+        gris = de_puntos["resultado"] == "acierto: sin marca"
+        de_puntos["tam"] = np.where(gris, 30, 75)
+        de_puntos["opac"] = np.where(gris, 0.45, 0.92)
+        columnas = list(dict.fromkeys(["id", "mag", col_y, "resultado", "place", "fecha", "depth", "en_el_mar",
+                                       "marca_real", "prob_txt", "tam", "opac", "capa"]))
+
+        elegir = alt.selection_point(name="sismo", fields=["id"], on="click")
+        capas.append(alt.Chart(de_puntos[columnas]).mark_circle(stroke="white", strokeWidth=0.6).encode(
+            x=eje_x, y=eje_y,
+            color=alt.Color("resultado:N", scale=ESCALA_RESULTADO, title="qué dijo el modelo",
+                            legend=alt.Legend(orient="top", columns=3)),
+            size=alt.Size("tam:Q", scale=None),
+            opacity=alt.Opacity("opac:Q", scale=None),
+            order=alt.Order("capa:Q"),
+            tooltip=[alt.Tooltip("place:N", title="lugar"), alt.Tooltip("fecha:N", title="fecha (UTC)"),
+                     alt.Tooltip("mag:Q", title="magnitud"), alt.Tooltip("depth:Q", title="profundidad (km)"),
+                     alt.Tooltip("en_el_mar:N", title="mar o tierra"),
+                     alt.Tooltip("marca_real:N", title="marca de la USGS"),
+                     alt.Tooltip("prob_txt:N", title="probabilidad según el modelo"),
+                     alt.Tooltip("resultado:N", title="resultado")],
+        ).add_params(elegir))
+
+        # Línea de referencia según el eje Y elegido
+        referencia = None
+        if col_y == "prob_pct_num":
+            referencia = (UMBRAL * 100, f"umbral de alerta ({pct(UMBRAL)})", ROJO)
+        elif col_y == "dist_costa_km":
+            referencia = (0, "línea de costa (arriba mar / abajo tierra)", NEUTRO)
+        if referencia:
+            linea = alt.Chart(pd.DataFrame({"y": [referencia[0]], "t": [referencia[1]]}))
+            capas += [linea.mark_rule(color=referencia[2], strokeDash=[6, 4], strokeWidth=1.5).encode(y="y:Q"),
+                      linea.mark_text(align="right", baseline="bottom", dx=-4, dy=-3, color=referencia[2]).encode(
+                          y="y:Q", x=alt.value("width"), text="t:N")]
+
+        # El sismo elegido, con un anillo negro
+        if fila is not None:
+            capas.append(alt.Chart(pd.DataFrame({"mag": [fila["mag"]], col_y: [fila[col_y]]})).mark_point(
+                size=380, strokeWidth=3, color="#111111", filled=False).encode(x="mag:Q", y=f"{col_y}:Q"))
+
+        ejes = alt.layer(*capas).properties(height=500)
+        evento = st.altair_chart(ejes, theme=None, on_select="rerun", selection_mode=["sismo"], key="explora_ejes")
+        id_tocado = elegido_en(evento, "sismo", "id")
+        if id_tocado is not None and str(id_tocado) != str(st.session_state["explora_sismo_id"]):
+            st.session_state["explora_sismo_id"] = str(id_tocado)
+            st.rerun()
+
+        if muestreo_grises:
+            st.caption("Para mantener ágil el navegador se muestran todos los casos con marca y los errores, y una "
+                       "muestra de 2.500 sismos grises sin marca (filtrá por región o magnitud para ver el 100 %). "
+                       "Los números de arriba sí cuentan todos los sismos filtrados.")
+        else:
+            st.caption("Tocá cualquier punto para ver su ficha y ubicarlo en el mapa.")
+
+    # 5. Panel derecho: ficha completa del sismo tocado + mapa centrado en su ubicación exacta
+    with col_ubic:
+        st.markdown("##### Sismo seleccionado y ubicación")
+        punto_mapa = dict(longitude="longitude:Q", latitude="latitude:Q",
+                          color=alt.Color("resultado:N", scale=ESCALA_RESULTADO, legend=None))
+
+        if fila is None:
+            st.info("**Tocá cualquier punto** en el gráfico de la izquierda para ver su ficha completa y acercarte "
+                    "a su ubicación exacta en el mapa.")
+            ref = vista[["longitude", "latitude", "resultado"]].head(1500)
+            grafico(mapa([alt.Chart(ref).mark_circle(size=12, opacity=0.5, clip=True).encode(**punto_mapa)], alto=310))
+        else:
+            lat_s, lon_s = float(fila["latitude"]), float(fila["longitude"])
+            dlat = (vista["latitude"] - lat_s).abs()
+            dlon = ((vista["longitude"] - lon_s + 180) % 360 - 180).abs()
+            vecinos = vista[(dlat <= 10) & (dlon <= 14) & (vista["id"].astype(str) != str(fila["id"]))].head(120)
+
+            capa_vecinos = alt.Chart(vecinos[["longitude", "latitude", "resultado", "place", "mag"]]).mark_circle(
+                size=45, opacity=0.5, clip=True).encode(
+                **punto_mapa, tooltip=[alt.Tooltip("place:N", title="lugar"), alt.Tooltip("mag:Q", title="magnitud")])
+            capa_elegido = alt.Chart(pd.DataFrame([fila[["longitude", "latitude", "resultado", "place"]]])).mark_circle(
+                size=260, opacity=1, stroke="white", strokeWidth=3, clip=True).encode(
+                **punto_mapa, tooltip=[alt.Tooltip("place:N", title="lugar")])
+            grafico(mapa([capa_vecinos, capa_elegido], encuadre=(lon_s - 14, lat_s - 10, lon_s + 14, lat_s + 10),
+                         centro_lon=lon_s, alto=265))
+            st.caption("El sismo elegido, grande y con borde blanco; alrededor, los otros sismos filtrados de la zona, "
+                       "con el mismo color de lo que dijo el modelo.")
+
+            # Ficha completa del sismo
+            with st.container(border=True):
+                st.markdown(f"**{fila['place']}**")
+                st.caption(f"Fecha: {str(fila['time'])[:19].replace('T', ' ')} UTC · Conjunto: `{fila['conjunto']}`")
+                i1, i2, i3 = st.columns(3)
+                i1.metric("Magnitud", num(fila["mag"], 1), help=f"Tipo: {fila['magType']}")
+                i2.metric("Profundidad", f"{num(fila['depth'], 0)} km")
+                i3.metric("Prob. modelo", fila["prob_txt"])
+                st.markdown(
+                    f"- **Resultado:** `{fila['resultado']}` · **Marca USGS:** **{fila['marca_real']}**\n"
+                    f"- **Ubicación:** {fila['en_el_mar']} ({num(fila['dist_costa_km'], 0)} km a la costa) · "
+                    f"Lat `{num(lat_s, 2)}`, Lon `{num(lon_s, 2)}`\n"
+                    f"- **Tipo de magnitud:** `{fila['magType']}`"
+                )
+
+            # Botones para abrir la ubicación real o cargarlo en «Probá el modelo»
+            b1, b2 = st.columns(2)
+            b1.link_button("Abrir en Google Maps", f"https://www.google.com/maps?q={lat_s},{lon_s}", width="stretch")
+            b2.link_button("Ficha oficial USGS",
+                           f"https://earthquake.usgs.gov/earthquakes/eventpage/{fila['id']}/executive",
+                           width="stretch")
+
+            if st.button("Probar este sismo en «Probá el modelo» ↓", width="stretch", type="primary"):
+                r_ = resumen["rangos"]
+                tipos_ = resumen["magtypes"]
+                st.session_state["_proba_pendiente"] = {
+                    "proba_mag": float(np.clip(round(float(fila["mag"]), 1), r_["mag"][0], r_["mag"][1])),
+                    "proba_depth": float(np.clip(round(float(fila["depth"])), r_["depth"][0], r_["depth"][1])),
+                    "proba_lat": float(np.clip(round(lat_s, 1), r_["latitude"][0], r_["latitude"][1])),
+                    "proba_lon": float(np.clip(round(lon_s, 1), r_["longitude"][0], r_["longitude"][1])),
+                    "proba_mar": "mar" if fila["en_el_mar"] == "mar" else "tierra",
+                    "proba_magtype": fila["magType"] if fila["magType"] in tipos_ else "mww",
+                    "proba_zoom_zona": str(fila["region"]) if pd.notna(fila["region"]) else str(fila["place"]),
+                    "proba_ejemplo_sel": OPCION_CERO,
+                    "proba_ejemplo_prev": OPCION_CERO,
+                    "proba_mapa_ver": st.session_state.get("proba_mapa_ver", 0) + 1,
+                    "_desde_explora": True,
+                }
+                st.rerun()
+
+    # 6. Tabla con los sismos filtrados
+    with st.expander(f"Ver detalle tabular ({miles(len(vista))} sismos filtrados, ordenados por magnitud)"):
+        cols = ["time", "place", "mag", "magType", "depth", "dist_costa_km", "en_el_mar", "marca_real",
+                "prob_txt", "resultado", "conjunto"]
+        renombre = {
+            "time": "Fecha (UTC)", "place": "Lugar", "mag": "Magnitud", "magType": "Tipo",
+            "depth": "Profundidad (km)", "dist_costa_km": "Dist. costa (km)", "en_el_mar": "Epicentro",
+            "marca_real": "Marca USGS", "prob_txt": "Prob. modelo", "resultado": "Resultado", "conjunto": "Conjunto",
+        }
+        st.dataframe(
+            vista.sort_values(["mag", "probabilidad"], ascending=False)[cols].head(300).rename(columns=renombre),
+            hide_index=True,
+            width="stretch",
+        )
+
+
+seccion_explora()
 st.divider()
 
 
 # =================================================================================================
-# COPA · PROBÁ EL MODELO
+# COPA · PROBÁ EL MODELO (CONTROLES A LA IZQUIERDA, MAPA CLICABLE CON ZOOM POR ZONA A LA DERECHA)
 # =================================================================================================
-st.header("Tu turno · Probá el modelo")
-st.markdown("Armá un sismo y mirá qué probabilidad le da el modelo de que la USGS lo marque. Los controles van del "
-            "mínimo al máximo que vio el entrenamiento, así que no se puede cargar un valor que el modelo no conoce.")
+def seccion_proba():
+    st.header("Tu turno · Probá el modelo")
+    st.markdown("Partí de un sismo real, **hacé clic en una zona del mapa** para acercarte y ubicar tu sismo ahí, o "
+                "ajustá los controles a mano. Los controles van del mínimo al máximo que vio el entrenamiento, así que "
+                "no se puede cargar un valor que el modelo no conoce.")
 
-r = resumen["rangos"]
-tipos = resumen["magtypes"]
+    r = resumen["rangos"]
+    tipos = resumen["magtypes"]
 
+    def dentro(valor, rango_):
+        return float(min(max(float(valor), float(rango_[0])), float(rango_[1])))
 
-def ejemplo(filtro, por, descripcion):
-    """El sismo real con el mayor valor de `por` entre los que cumplen el filtro."""
-    candidatos = modelados[filtro(modelados)]
-    return (descripcion, candidatos.loc[candidatos[por].idxmax()]) if len(candidatos) else None
+    defaults = {
+        "proba_mag": dentro(7.0, r["mag"]),
+        "proba_depth": dentro(25.0, r["depth"]),
+        "proba_lat": dentro(-33.5, r["latitude"]),
+        "proba_lon": dentro(-72.0, r["longitude"]),
+        "proba_mar": "mar",
+        "proba_magtype": "mww" if "mww" in tipos else tipos[0],
+        "proba_zoom_zona": None,
+        "proba_ejemplo_prev": OPCION_CERO,
+        "proba_mapa_ver": 0,
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
+    # Lo que dejó cargado un clic en el mapa o el botón de «Explorá» (se aplica antes de dibujar los controles)
+    pend = st.session_state.pop("_proba_pendiente", None)
+    if pend:
+        desde_explora = pend.pop("_desde_explora", False)
+        for k, v in pend.items():
+            st.session_state[k] = v
+        if desde_explora:
+            st.toast("El sismo de «Explorá» quedó cargado en «Probá el modelo».")
 
-ejemplos = [e for e in [
-    ejemplo(lambda d: d["mag"] > 0, "mag", "El más grande del catálogo"),
-    ejemplo(lambda d: (d["region"] == "Alaska") & (d["tsunami"] == 1) & (d["mag"] < 5.5), "probabilidad",
-            "Un sismo chico de Alaska, con marca"),
-    ejemplo(lambda d: (d["en_el_mar"] == "tierra") & (d["mag"] >= 6.8), "mag", "Un sismo fuerte en tierra"),
-    ejemplo(lambda d: d["depth"] > 300, "mag", "Un sismo grande y profundo"),
-    ejemplo(lambda d: (d["magType"] == "mb") & (d["tsunami"] == 0), "mag", "El mayor sismo informado en mb"),
-] if e]
-opciones = ["— armarlo desde cero —"] + [f"{d}: {s['place']} ({num(s['mag'], 1)}, {s['time'][:10]})" for d, s in ejemplos]
-elegido = st.selectbox("Partir de un sismo real", opciones)
-real = ejemplos[opciones.index(elegido) - 1][1] if elegido != opciones[0] else None
+    def ejemplo(filtro, por, descripcion):
+        """El sismo real con el mayor valor de `por` entre los que cumplen el filtro."""
+        candidatos = modelados[filtro(modelados)]
+        return (descripcion, candidatos.loc[candidatos[por].idxmax()]) if len(candidatos) else None
 
+    ejemplos = [e for e in [
+        ejemplo(lambda d: d["mag"] > 0, "mag", "El más grande del catálogo"),
+        ejemplo(lambda d: (d["region"] == "Alaska") & (d["tsunami"] == 1) & (d["mag"] < 5.5), "probabilidad",
+                "Un sismo chico de Alaska, con marca"),
+        ejemplo(lambda d: (d["en_el_mar"] == "tierra") & (d["mag"] >= 6.8), "mag", "Un sismo fuerte en tierra"),
+        ejemplo(lambda d: d["depth"] > 300, "mag", "Un sismo grande y profundo"),
+        ejemplo(lambda d: (d["magType"] == "mb") & (d["tsunami"] == 0), "mag", "El mayor sismo informado en mb"),
+    ] if e]
+    opciones = [OPCION_CERO] + [f"{d}: {s['place']} ({num(s['mag'], 1)}, {s['time'][:10]})" for d, s in ejemplos]
 
-def dentro(valor, rango_):
-    return float(min(max(valor, rango_[0]), rango_[1]))
+    # Dos columnas: los controles a la izquierda y el mapa a la derecha, para ver la latitud y la longitud junto al mapa
+    izq, der = st.columns([1, 1.35], gap="large")
 
+    with izq:
+        elegido = st.selectbox("Partir de un sismo real", opciones, key="proba_ejemplo_sel")
+        real = ejemplos[opciones.index(elegido) - 1][1] if elegido != OPCION_CERO else None
 
-inicial = {"mag": 7.0, "depth": 25.0, "latitude": -33.5, "longitude": -72.0, "magType": "mww", "mar": True}
-if real is not None:
-    inicial = {"mag": round(float(real["mag"]), 1), "depth": round(float(real["depth"])),
-               "latitude": round(float(real["latitude"]), 1), "longitude": round(float(real["longitude"]), 1),
-               "magType": real["magType"], "mar": real["en_el_mar"] == "mar"}
-    st.caption(f"En la realidad, la USGS {'**lo marcó**' if real['tsunami'] == 1 else '**no lo marcó**'}. Los controles "
-               "arrancan con sus valores (redondeados): movelos para ver qué cambia.")
+        if elegido != st.session_state["proba_ejemplo_prev"]:
+            st.session_state["proba_ejemplo_prev"] = elegido
+            if real is not None:
+                st.session_state["proba_mag"] = dentro(round(float(real["mag"]), 1), r["mag"])
+                st.session_state["proba_depth"] = dentro(round(float(real["depth"])), r["depth"])
+                st.session_state["proba_lat"] = dentro(round(float(real["latitude"]), 1), r["latitude"])
+                st.session_state["proba_lon"] = dentro(round(float(real["longitude"]), 1), r["longitude"])
+                st.session_state["proba_mar"] = "mar" if real["en_el_mar"] == "mar" else "tierra"
+                st.session_state["proba_magtype"] = (real["magType"] if real["magType"] in tipos
+                                                     else defaults["proba_magtype"])
+                st.session_state["proba_zoom_zona"] = (str(real["region"]) if pd.notna(real["region"])
+                                                       else "Sismo elegido")
+            else:
+                st.session_state["proba_zoom_zona"] = None
+            st.session_state["proba_mapa_ver"] += 1
 
-p1, p2 = st.columns(2)
-mag = p1.slider("Magnitud", r["mag"][0], r["mag"][1], dentro(inicial["mag"], r["mag"]), step=0.1, format="%.1f")
-depth = p1.slider("Profundidad (km)", r["depth"][0], r["depth"][1], dentro(inicial["depth"], r["depth"]), step=1.0)
-lat = p2.slider("Latitud", r["latitude"][0], r["latitude"][1], dentro(inicial["latitude"], r["latitude"]), step=0.1,
-                format="%.1f")
-lon = p2.slider("Longitud", r["longitude"][0], r["longitude"][1], dentro(inicial["longitude"], r["longitude"]),
-                step=0.1, format="%.1f")
-en_el_mar = p2.radio("¿El epicentro está en el mar o en tierra?", ["mar", "tierra"], horizontal=True,
-                     index=0 if inicial["mar"] else 1) == "mar"
+        if real is not None:
+            st.caption(f"En la realidad, la USGS {'**lo marcó**' if real['tsunami'] == 1 else '**no lo marcó**'}. "
+                       "Los controles arrancan con sus valores (redondeados): movelos o cliqueá otro punto en el mapa.")
 
-with st.expander("Opciones avanzadas: tipo de magnitud"):
-    tipo_inicial = inicial["magType"] if inicial["magType"] in tipos else "mww"
-    mag_type = st.selectbox("Tipo de magnitud", tipos, index=tipos.index(tipo_inicial) if tipo_inicial in tipos else 0,
-                            format_func=lambda m: f"{NOMBRES_MAGTYPE.get(m, m)} ({m})",
-                            help="Sólo se ofrecen los tipos con al menos 20 sismos en el entrenamiento.")
-    cuota_mww = (modelados["magType"] == "mww").mean()
-    st.caption(f"Es el método con que la USGS calculó la magnitud del sismo. Si no sabés cuál elegir, dejá *mww*: es "
-               f"la de {round(cuota_mww * 10)} de cada 10 sismos y la que la USGS usa para los sismos grandes. "
-               "Qué significa cada una está en el cuadro de abajo.")
+        mag = st.slider("Magnitud", float(r["mag"][0]), float(r["mag"][1]), step=0.1, format="%.1f", key="proba_mag")
+        depth = st.slider("Profundidad (km)", float(r["depth"][0]), float(r["depth"][1]), step=1.0,
+                          key="proba_depth")
+        lat = st.slider("Latitud", float(r["latitude"][0]), float(r["latitude"][1]), step=0.1, format="%.1f",
+                        key="proba_lat")
+        lon = st.slider("Longitud", float(r["longitude"][0]), float(r["longitude"][1]), step=0.1, format="%.1f",
+                        key="proba_lon")
+        en_el_mar = st.radio("¿El epicentro está en el mar o en tierra?", ["mar", "tierra"], horizontal=True,
+                             key="proba_mar") == "mar"
 
-en_mb = modelados[modelados["magType"] == "mb"]
-with st.expander("¿Qué significa cada tipo de magnitud?"):
-    conteo_tipos = modelados.groupby("magType")["tsunami"].agg(["size", "sum"])
-    filas = []
-    for m in tipos:
-        como, cuando = EXPLICACION_MAGTYPE.get(m, ("—", "—"))
-        n, k = (int(conteo_tipos.loc[m, "size"]), int(conteo_tipos.loc[m, "sum"])) if m in conteo_tipos.index else (0, 0)
-        en_datos = f"{miles(n)} sismos · {pct(k / n, 1)} con marca" if n else "—"
-        filas.append(f"| **{m}** | {NOMBRES_MAGTYPE.get(m, m)} | {como} | {cuando} | {en_datos} |")
-    st.markdown(f"""
+        with st.expander("Opciones avanzadas: tipo de magnitud"):
+            mag_type = st.selectbox("Tipo de magnitud", tipos, format_func=lambda m: f"{NOMBRES_MAGTYPE.get(m, m)} ({m})",
+                                    help="Sólo se ofrecen los tipos con al menos 20 sismos en el entrenamiento.",
+                                    key="proba_magtype")
+            cuota_mww = (modelados["magType"] == "mww").mean()
+            st.caption(f"Es el método con que la USGS calculó la magnitud del sismo. Si no sabés cuál elegir, dejá "
+                       f"*mww*: es la de {round(cuota_mww * 10)} de cada 10 sismos y la que la USGS usa para los sismos "
+                       "grandes. Qué significa cada una está en el cuadro de abajo.")
+
+        if mag_type == "mb" and mag >= 6.5:
+            todos_mb = sismos[sismos["magType"] == "mb"]
+            st.warning(f"Combinación casi inexistente: la escala *mb* se satura cerca de magnitud 6, así que la USGS "
+                       f"casi no informa en mb sismos tan grandes. En los datos hay {(todos_mb['mag'] >= 6.5).sum()} "
+                       f"de {miles(len(todos_mb))} (el mayor, de {num(todos_mb['mag'].max(), 1)}). El modelo casi no "
+                       "vio casos así: tomá esta probabilidad con cuidado.")
+
+        probabilidad = guardado["pipeline"].predict_proba(
+            modelo.caso(mag, depth, lat, lon, mag_type, en_el_mar))[0, 1]
+        alerta = probabilidad >= UMBRAL
+
+        m1, m2 = st.columns(2)
+        tarjeta_kpi(m1, pct(probabilidad), "probabilidad de que la USGS le ponga la marca de alerta")
+        tarjeta_kpi(m2, "Sí · Alerta" if alerta else "No · Sin alerta",
+                    f"decisión del modelo con el umbral elegido ({num(UMBRAL, 2)})")
+
+        rango_elegido = RANGOS_MAG[int(np.digitize(mag, CORTES_MAG[1:-1], right=True))]
+        mismo_rango = modelados[modelados["rango_mag"].astype(str) == rango_elegido]
+        misma_zona = mismo_rango[mismo_rango["en_el_mar"] == ("mar" if en_el_mar else "tierra")]
+        st.caption(f"Para comparar: en los datos, los sismos de magnitud {rango_elegido} tienen la marca el "
+                   f"{pct(mismo_rango['tsunami'].mean())} de las veces ({pct(misma_zona['tsunami'].mean())} los que "
+                   f"ocurren en {'el mar' if en_el_mar else 'tierra'}). La diferencia con la probabilidad del modelo la "
+                   "pone, sobre todo, el lugar.")
+
+    with der:
+        # --- El mapa, en 2 niveles: el mundo con las zonas sísmicas, o el zoom en una zona con sus sismos reales ---
+        zona_enfocada = st.session_state["proba_zoom_zona"]
+        b1, b2 = st.columns([3, 1.3])
+        if zona_enfocada is None:
+            b1.markdown("##### Ubicación en el mapa · *hacé clic en una zona para acercarte*")
+            if b2.button("Acercar a mi sismo", width="stretch"):
+                st.session_state["proba_zoom_zona"] = "Ubicación elegida"
+                st.session_state["proba_mapa_ver"] += 1
+                st.rerun()
+        else:
+            b1.markdown(f"##### Zoom en **{zona_enfocada}** · *cliqueá un sismo cercano para mover tu punto ahí*")
+            if b2.button("← Volver a vista mundial", width="stretch", type="primary"):
+                st.session_state["proba_zoom_zona"] = None
+                st.session_state["proba_mapa_ver"] += 1
+                st.rerun()
+
+        # La caja del árbol (la misma de «El modelo»), recortada al borde del mapa
+        capas = [caja.mark_rule(color=ROJO, strokeWidth=2, strokeDash=[6, 3], clip=True),
+                 texto_caja.mark_text(align="left", color=ROJO, fontSize=12, fontWeight="bold", clip=True)]
+
+        if zona_enfocada is None:
+            # NIVEL 1: el mundo, con las zonas sísmicas (celdas de 22° × 22° con 20 sismos o más) para hacer clic
+            paso = 22
+            tmp = modelados.assign(
+                zid=(np.floor(modelados["latitude"] / paso) * paso).astype(int).astype(str)
+                + "_"
+                + (np.floor(modelados["longitude"] / paso) * paso).astype(int).astype(str)
+            )
+            zonas = (
+                tmp.groupby("zid", as_index=False)
+                .agg(
+                    lat=("latitude", "mean"),
+                    lon=("longitude", "mean"),
+                    sismos=("mag", "size"),
+                    con_marca=("tsunami", "sum"),
+                    nombre=("region", _nombre_principal),
+                    mar=("en_el_mar", lambda s: "mar" if (s == "mar").mean() >= 0.5 else "tierra"),
+                )
+            )
+            zonas = zonas[zonas["sismos"] >= 20].copy()
+            zonas["tasa"] = zonas["con_marca"] / zonas["sismos"]
+            seleccion = "zona"
+            capas.append(alt.Chart(zonas).mark_circle(color=NEUTRO, opacity=0.35, stroke="white", strokeWidth=1,
+                                                      clip=True).encode(
+                longitude="lon:Q", latitude="lat:Q",
+                size=alt.Size("sismos:Q", scale=alt.Scale(type="sqrt", range=[150, 900]), legend=None),
+                tooltip=[alt.Tooltip("nombre:N", title="zona"),
+                         alt.Tooltip("sismos:Q", title="sismos registrados", format=","),
+                         alt.Tooltip("tasa:Q", title="con marca", format=".1%")],
+            ).add_params(alt.selection_point(name=seleccion, fields=["zid"], on="click")))
+            encuadre, centro_lon = None, 0.0
+        else:
+            # NIVEL 2: zoom en la zona + sismos reales cercanos de magnitud parecida
+            dlat = (modelados["latitude"] - lat).abs()
+            dlon = ((modelados["longitude"] - lon + 180) % 360 - 180).abs()
+            cercanos = modelados[(dlat <= 12) & (dlon <= 16) & ((modelados["mag"] - mag).abs() <= 0.6)].copy()
+            if len(cercanos) > 180:
+                marcados_c = cercanos[cercanos["tsunami"] == 1]
+                no_marcados_c = cercanos[cercanos["tsunami"] == 0].head(max(180 - len(marcados_c), 0))
+                cercanos = pd.concat([marcados_c, no_marcados_c])
+            seleccion = "cercano"
+            capas.append(alt.Chart(cercanos[["id", "longitude", "latitude", "marca", "place", "mag", "depth",
+                                             "en_el_mar"]]).mark_circle(opacity=0.85, stroke="white", strokeWidth=0.7,
+                                                                        clip=True).encode(
+                longitude="longitude:Q", latitude="latitude:Q",
+                color=alt.Color("marca:N", scale=ESCALA_MARCA, title="sismos reales cercanos",
+                                legend=alt.Legend(orient="top")),
+                size=alt.Size("marca:N", scale=alt.Scale(domain=[CON, SIN], range=[140, 70]), legend=None),
+                order=alt.Order("mag:Q"),
+                tooltip=[alt.Tooltip("place:N", title="lugar"), alt.Tooltip("mag:Q", title="magnitud real"),
+                         alt.Tooltip("depth:Q", title="profundidad (km)"),
+                         alt.Tooltip("en_el_mar:N", title="mar o tierra"), alt.Tooltip("marca:N", title="marca")],
+            ).add_params(alt.selection_point(name=seleccion, fields=["id"], on="click")))
+            encuadre, centro_lon = (lon - 16, lat - 12, lon + 16, lat + 12), lon
+
+        # Tu sismo: un punto rojo con borde blanco
+        tu_sismo = pd.DataFrame({"longitude": [lon], "latitude": [lat],
+                                 "t": [f"Tu sismo: magnitud {num(mag, 1)}, probabilidad {pct(probabilidad)}"]})
+        capas.append(alt.Chart(tu_sismo).mark_circle(size=320, color=ROJO, opacity=1, stroke="white", strokeWidth=2.5,
+                                                     clip=True).encode(
+            longitude="longitude:Q", latitude="latitude:Q", tooltip=alt.Tooltip("t:N", title=" ")))
+
+        clave_mapa = f"mapa_proba_{'mundo' if zona_enfocada is None else 'zoom'}_{st.session_state['proba_mapa_ver']}"
+        evento = st.altair_chart(mapa(capas, encuadre, centro_lon, alto=560), theme=None, on_select="rerun",
+                                 selection_mode=[seleccion], key=clave_mapa)
+        st.caption("El punto rojo es tu sismo. La línea roja punteada es la «caja» del árbol de «El modelo»: al norte y "
+                   "al oeste de ella, la USGS marca sismos más chicos.")
+
+        tocado = elegido_en(evento, seleccion, "zid" if seleccion == "zona" else "id")
+        if tocado is not None:
+            if seleccion == "zona":
+                z = zonas[zonas["zid"] == str(tocado)]
+                destino = None if z.empty else (z.iloc[0]["lat"], z.iloc[0]["lon"], z.iloc[0]["mar"], z.iloc[0]["nombre"])
+            else:
+                c = cercanos[cercanos["id"].astype(str) == str(tocado)]
+                destino = None if c.empty else (c.iloc[0]["latitude"], c.iloc[0]["longitude"], c.iloc[0]["en_el_mar"],
+                                                zona_enfocada)
+            if destino is not None:
+                st.session_state["_proba_pendiente"] = {
+                    "proba_lat": dentro(round(float(destino[0]), 1), r["latitude"]),
+                    "proba_lon": dentro(round(float(destino[1]), 1), r["longitude"]),
+                    "proba_mar": "mar" if destino[2] == "mar" else "tierra",
+                    "proba_zoom_zona": str(destino[3]),
+                    "proba_mapa_ver": st.session_state["proba_mapa_ver"] + 1,
+                }
+                st.rerun()
+
+    en_mb = modelados[modelados["magType"] == "mb"]
+    with st.expander("¿Qué significa cada tipo de magnitud?"):
+        conteo_tipos = modelados.groupby("magType")["tsunami"].agg(["size", "sum"])
+        filas = []
+        for m in tipos:
+            como, cuando = EXPLICACION_MAGTYPE.get(m, ("—", "—"))
+            n, k = ((int(conteo_tipos.loc[m, "size"]), int(conteo_tipos.loc[m, "sum"]))
+                    if m in conteo_tipos.index else (0, 0))
+            en_datos = f"{miles(n)} sismos · {pct(k / n, 1)} con marca" if n else "—"
+            filas.append(f"| **{m}** | {NOMBRES_MAGTYPE.get(m, m)} | {como} | {cuando} | {en_datos} |")
+        st.markdown(f"""
 La **magnitud** mide el tamaño de un sismo, pero hay varias formas de calcularla. La sigla indica qué método usó la
 USGS (o la red que informó el sismo). Hay dos familias:
 
@@ -1011,30 +1465,10 @@ USGS la usa en sismos moderados. Por eso el modelo aprendió a asociar *mb* con 
 en el selector (como *mwp* o *mwc*) tienen menos de 20 sismos en el entrenamiento y no se ofrecen.
 """)
 
-if mag_type == "mb" and mag >= 6.5:
-    todos_mb = sismos[sismos["magType"] == "mb"]
-    st.warning(f"Combinación casi inexistente: la escala *mb* se satura cerca de magnitud 6, así que la USGS casi no "
-               f"informa en mb sismos tan grandes. En los datos hay {(todos_mb['mag'] >= 6.5).sum()} de "
-               f"{miles(len(todos_mb))} (el mayor, de {num(todos_mb['mag'].max(), 1)}). El modelo casi no vio casos "
-               "así: tomá esta probabilidad con cuidado.")
+    st.divider()
+    st.caption(f"Datos: USGS (earthquake.usgs.gov), sismos del {resumen['datos']['desde']} al "
+               f"{resumen['datos']['hasta']}. Modelo: gradient boosting entrenado con datos hasta el 31/03/2026, "
+               f"semilla {resumen['semilla']}.")
 
-probabilidad = guardado["pipeline"].predict_proba(modelo.caso(mag, depth, lat, lon, mag_type, en_el_mar))[0, 1]
-m1, m2 = st.columns(2)
-m1.metric("probabilidad de que la USGS lo marque", pct(probabilidad))
-m2.metric(f"alerta (umbral {num(UMBRAL, 2)})", "sí" if probabilidad >= UMBRAL else "no")
 
-rango_elegido = RANGOS_MAG[int(np.digitize(mag, CORTES_MAG[1:-1], right=True))]
-mismo_rango = modelados[modelados["rango_mag"].astype(str) == rango_elegido]
-misma_zona = mismo_rango[mismo_rango["en_el_mar"] == ("mar" if en_el_mar else "tierra")]
-st.caption(f"Para comparar: en los datos, los sismos de magnitud {rango_elegido} tienen la marca el "
-           f"{pct(mismo_rango['tsunami'].mean())} de las veces ({pct(misma_zona['tsunami'].mean())} los que ocurren en "
-           f"{'el mar' if en_el_mar else 'tierra'}). La diferencia con la probabilidad del modelo la pone, sobre todo, "
-           "el lugar.")
-
-tu_sismo = alt.Chart(pd.DataFrame({"latitude": [lat], "longitude": [lon]})).mark_point(
-    shape="cross", size=400, strokeWidth=3, color="#e3242b").encode(longitude="longitude:Q", latitude="latitude:Q")
-grafico(alt.layer(fondo, tu_sismo).project(type="equirectangular").properties(width=900, height=360))
-
-st.divider()
-st.caption(f"Datos: USGS (earthquake.usgs.gov), sismos del {resumen['datos']['desde']} al {resumen['datos']['hasta']}. "
-           f"Modelo: gradient boosting entrenado con datos hasta el 31/03/2026, semilla {resumen['semilla']}.")
+seccion_proba()

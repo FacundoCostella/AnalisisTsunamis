@@ -18,20 +18,20 @@ La app presenta los datos con la estructura de **copa de martini** (Segel y Heer
 
 | Parte | Secciones de la app | Quién decide | Qué hace |
 |---|---|---|---|
-| Base | Portada | La app | Plantea la pregunta, cuenta de qué se trata el proyecto y aclara qué significa la marca de la USGS |
+| Base | Portada | La app | Plantea la pregunta y la responde, muestra tres números del test (F1, sismos con marca detectados y falsas alarmas), cuenta de qué se trata el proyecto y aclara qué significa la marca de la USGS |
 | Tallo | Los datos · Lo que encontramos · El modelo | La app | Cuenta la historia en orden. Cada título afirma algo, un gráfico lo prueba y el desplegable «Cómo lo sabemos» tiene el detalle técnico |
 | Copa | Explorá · Probá el modelo | El lector | Comprueba la historia con sus propios filtros y casos |
 
 ## Cómo usar la app
 
 1. **Leé el tallo de arriba hacia abajo.** Los títulos solos cuentan la historia; si querés saber de dónde sale cada afirmación, abrí «Cómo lo sabemos». Todo el tallo se lee sin tocar nada: en «Los datos», cuántos sismos tienen la marca, las variables con las que trabajamos, por qué la validación del modelo se arma por grupos y las columnas que no se usan; en «Lo que encontramos», cómo cambia la marca con la magnitud y qué variables separan a los sismos con marca; en «El modelo», qué dio, en qué se apoya y las conclusiones.
-2. **En «Explorá»**, cada punto del mapa es un sismo, coloreado según lo que dijo el modelo: acierto con marca, falso negativo, falsa alarma, acierto sin marca o sin marca cargada. Arrastrá el mouse sobre el histograma de magnitud para elegir un rango (el mapa muestra sólo esos sismos), filtrá por resultado o región, hacé clic en la leyenda para resaltar un resultado y pasá el mouse por un punto para ver su detalle. Cada sismo lo predice un modelo que no lo vio.
+2. **En «Explorá»**, cada punto es un sismo en un gráfico de magnitud contra profundidad, probabilidad del modelo o distancia a la costa (se elige el eje), coloreado según lo que dijo el modelo: acierto con marca, falso negativo, falsa alarma, acierto sin marca o sin marca cargada. Elegí qué inspeccionar (aciertos con marca y errores, sólo aciertos con marca, sólo errores, sismos sin marca cargada o todos), filtrá por magnitud, región y mar o tierra, y hacé clic en un punto: a la derecha aparece su ficha y su ubicación en el mapa, con un botón para cargarlo en «Probá el modelo». Cada sismo lo predice un modelo que no lo vio.
 
    ![Sección «Explorá»: el mapa de sismos coloreado según lo que dijo el modelo](docs/img/explora.png)
 
-3. **En «Probá el modelo»**, partí de un sismo real (el menú carga sus valores) o armá uno con magnitud, profundidad, latitud, longitud y mar o tierra, y mirá qué probabilidad le da el modelo de que la USGS lo marque. Hay alerta si la probabilidad es 0,27 o más. El tipo de magnitud está en «Opciones avanzadas», y otro desplegable explica qué significa cada sigla.
+3. **En «Probá el modelo»**, los controles están a la izquierda y el mapa a la derecha. Partí de un sismo real (el menú carga sus valores), hacé clic en una zona del mapa para acercarte y mover tu sismo ahí, o armá uno con magnitud, profundidad, latitud, longitud y mar o tierra, y mirá qué probabilidad le da el modelo de que la USGS lo marque. Hay alerta si la probabilidad es 0,27 o más. El tipo de magnitud está en «Opciones avanzadas», y otro desplegable explica qué significa cada sigla.
 
-   ![Sección «Probá el modelo»: los controles, la probabilidad y la cruz que ubica el sismo](docs/img/proba-modelo.png)
+   ![Sección «Probá el modelo»: los controles, la probabilidad y el mapa que ubica el sismo](docs/img/proba-modelo.png)
 
 **Casos para probar** (tipo de magnitud mww):
 
@@ -57,24 +57,24 @@ Las dos filas de magnitud 5,5 muestran el hallazgo central: el mismo sismo pasa 
 
 ### El modelo
 
-f1 macro en validación cruzada (media ± desvío), con validación por grupos de 2° × 2° y mes:
+La métrica es el **F1 de la clase con marca** (`tsunami = 1`): combina su precisión y su recall, y no se infla con los aciertos en los sismos sin marca. F1 en validación cruzada (media ± desvío), con validación por grupos de 2° × 2° y mes:
 
-| Modelo | f1 macro |
+| Modelo | F1 |
 |---|---|
-| Piso (siempre «sin marca») | 0,489 ± 0,000 |
-| Regresión logística | 0,747 ± 0,025 |
-| Árbol de decisión | 0,842 ± 0,014 |
-| Random forest | 0,872 ± 0,016 |
-| Gradient boosting | 0,867 ± 0,016 |
-| **Gradient boosting ajustado (el que usa la app)** | **0,881 ± 0,011** |
+| Piso (siempre «sin marca») | 0,000 ± 0,000 |
+| Regresión logística | 0,512 ± 0,049 |
+| Árbol de decisión | 0,697 ± 0,026 |
+| Random forest | 0,754 ± 0,031 |
+| Gradient boosting | 0,746 ± 0,031 |
+| **Gradient boosting ajustado (el que usa la app)** | **0,772 ± 0,020** |
 
-Random forest y gradient boosting empatan sin ajustar: la diferencia (0,005) es tres veces menor que el desvío (0,016), y también empatan en PR-AUC. Se eligió el boosting porque entrena unas tres veces más rápido y da un modelo más liviano para la app. Una vez ajustado con `GridSearchCV` supera a todos. El umbral 0,27 se eligió por validación cruzada: es el que más recall da sin perder f1, porque el error caro es no marcar un sismo con potencial de tsunami.
+Random forest y gradient boosting empatan sin ajustar: la diferencia (0,008) es menor que el desvío (0,031), y también empatan en PR-AUC. Se eligió el boosting porque entrena unas tres veces más rápido y da un modelo más liviano para la app. Una vez ajustado con `GridSearchCV` supera a todos. El umbral 0,27 se eligió por validación cruzada: es el que da el F1 más alto y, a la vez, mucho más recall que 0,5, porque el error caro es no marcar un sismo con potencial de tsunami.
 
 En el test, mirado una sola vez:
 
 | Medida | Valor |
 |---|---|
-| f1 macro | 0,876 (validación cruzada: 0,888) |
+| F1 de la clase con marca | 0,764 (validación cruzada: 0,788) |
 | Recall de la clase tsunami | 0,917 (99 de 108 sismos con marca) |
 | Precisión de la clase tsunami | 0,656 |
 | PR-AUC | 0,804 (piso: 0,042) |
@@ -83,7 +83,7 @@ En el test, mirado una sola vez:
 
 ### Conclusiones
 
-- Lo que permite estimar si un sismo lleva la marca de tsunami es **su magnitud y su ubicación**, con un peso parecido: al desordenar cada columna en el test, el f1 cae 0,17 con la longitud, 0,16 con la magnitud y 0,15 con la latitud. El tipo de magnitud aporta algo (0,10); la profundidad y el mar o la tierra, nada.
+- Lo que permite estimar si un sismo lleva la marca de tsunami es **su magnitud y su ubicación**, con un peso parecido: al desordenar cada columna en el test, el F1 cae 0,34 con la longitud, 0,31 con la magnitud y 0,30 con la latitud. El tipo de magnitud aporta algo (0,19); la profundidad y el mar o la tierra, nada.
 - La regla tiene dos partes: un sismo de más de 6 casi siempre se marca, en cualquier lugar; uno moderado, casi sólo cerca de Alaska y la costa oeste.
 - La ubicación no es fuga: las coordenadas existen apenas ocurre el sismo y no se calculan con la etiqueta. Pesan porque la regla de la USGS depende del lugar.
 - El boosting le gana a la regresión logística porque puede dibujar la «caja» geográfica de Alaska; la logística sólo puede decir «más al norte, más marca».
@@ -115,7 +115,7 @@ flowchart LR
 | `modelo.py` | Las piezas del modelo (el transformador `EsOceanico`, el pipeline, la validación por grupos, la semilla y el umbral). Es el mismo código del notebook de la Entrega 3 |
 | `build_app.py` | Toma el CSV, entrena el modelo elegido, calcula lo que muestra la app y repite los experimentos de la Entrega 3 que aparecen en ella (comparación de modelos, formas de partir, ablación, umbral, importancia y el árbol chico) |
 | `app_data/` | Lo que genera `build_app.py`: `sismos_app.csv`, `resumen.json` y `modelo.joblib` |
-| `app.py` | La aplicación de Streamlit. Los gráficos están hechos con Altair |
+| `app.py` | La aplicación de Streamlit. Todos los gráficos están hechos con Altair; en «Explorá» y «Probá el modelo», los clics sobre los puntos se leen con las selecciones de Altair (`on_select` de Streamlit) |
 | `docs/img/` | Las capturas de este README |
 
 ## Cómo se corre
