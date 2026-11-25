@@ -51,8 +51,6 @@ Las dos filas de magnitud 5,5 muestran el hallazgo central: el mismo sismo pasa 
 - **La otra mitad de la regla es el lugar.** 230 de las 237 marcas de magnitud menor a 6 están en Alaska y la costa oeste de Norteamérica, donde la USGS opera un sistema de alerta regional con un umbral más bajo.
 - **La profundidad y la distancia a la costa casi no separan** (0,03 y 0,17; 0,42 si se miran sólo los sismos en el mar).
 
-![Mapa de «El modelo»: las marcas de magnitud menor a 6 se concentran en Alaska y la costa oeste](docs/img/hallazgo-mapa.png)
-
 ### El modelo
 
 La métrica es el **F1 de la clase con marca** (`tsunami = 1`): combina su precisión y su recall, y no se infla con los aciertos en los sismos sin marca. F1 en validación cruzada (media ± desvío), con validación por grupos de 2° × 2° y mes:
