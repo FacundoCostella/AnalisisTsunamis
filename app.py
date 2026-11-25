@@ -186,7 +186,7 @@ st.title("¿Qué características de un sismo permiten estimar si está asociado
 # La respuesta a la pregunta, en un párrafo y con letra más grande que el resto
 st.markdown(
     "<div style='font-size:1.2rem; line-height:1.6; margin-bottom:1rem'>"
-    "<b>Con nuestros datos, la pregunta no se puede responder tal como la planteamos.</b> El catálogo de la USGS no "
+    "<b>Con nuestros datos, la pregunta no se puede responder tal como la planteamos.</b> El catálogo de la USGS (Servicio Geológico de Estados Unidos) no "
     "registra qué sismos generaron un tsunami: la columna <code>tsunami</code> es la alerta que la USGS emite cuando un "
     "sismo cumple su criterio. Lo más cerca que pudimos llegar es estimar qué sismos reciben esa alerta."
     "</div>", unsafe_allow_html=True)
@@ -212,6 +212,12 @@ for col, (valor, color, texto) in zip(st.columns(3), numeros_portada):
                  f"<div style='color:{GRIS}; line-height:1.4; margin-bottom:1rem'>{texto}</div>",
                  unsafe_allow_html=True)
 
+st.subheader("`tsunami = 1` no significa que hubo una ola: es la marca de alerta de la USGS")
+st.markdown("La marca la pone la USGS cuando un sismo cumple su criterio de alerta, y ese criterio "
+            "depende de la magnitud **y de la región**: cerca de Alaska y de la costa oeste de Norteamérica, donde la "
+            "USGS opera un sistema de alerta propio, marca sismos más chicos que en el resto del mundo. Por eso toda la "
+            "aplicación habla de **sismos con marca de la USGS**, y el modelo predice esa marca, no la ola.")
+
 st.header("De qué se trata")
 st.markdown(f"""
 Un **tsunami** es una serie de olas que se forma cuando un sismo grande mueve de golpe el fondo del mar. No todo sismo
@@ -231,12 +237,6 @@ pasos = [("1 · Los datos", "Un pipeline descarga todos los días los sismos del
 for col, (titulo, texto) in zip(st.columns(4), pasos):
     with col.container(border=True):
         st.markdown(f"**{titulo}**  \n{texto}")
-
-st.subheader("`tsunami = 1` no significa que hubo una ola: es la marca de alerta de la USGS")
-st.markdown("La marca no mide el mar. La pone la USGS cuando un sismo cumple su criterio de alerta, y ese criterio "
-            "depende de la magnitud **y de la región**: cerca de Alaska y de la costa oeste de Norteamérica, donde la "
-            "USGS opera un sistema de alerta propio, marca sismos más chicos que en el resto del mundo. Por eso toda la "
-            "aplicación habla de **sismos con marca de la USGS**, y el modelo predice esa marca, no la ola.")
 
 st.divider()
 
