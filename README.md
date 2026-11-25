@@ -1,6 +1,6 @@
 # ¿Qué sismos marca la USGS con alerta de tsunami?
 
-Proyecto Integrador · Ciencia de Datos · UTN FRM · 2026 · Grupo 9 (Comisión 5K09)
+Proyecto Integrador · Ciencia de Datos · UTN FRM · 2026 ·
 
 **Pregunta:** ¿Qué características de un sismo permiten estimar si está asociado a un tsunami?
 
@@ -143,21 +143,3 @@ python build_app.py --datos ruta/a/sismos_master.csv
 Después hay que subir la carpeta `app_data/` al repositorio, y Streamlit Community Cloud vuelve a publicar la app sola.
 
 El corte de los datos está definido en `CORTE`, dentro de `modelo.py`. Cuando la USGS cargue las marcas desde abril de 2026, se puede mover `CORTE` y volver a correr el notebook y el script.
-
-## Cómo se publica
-
-1. Subir el repositorio a GitHub, con la carpeta `app_data/` incluida.
-2. En [share.streamlit.io](https://share.streamlit.io), elegir **Create app**, este repositorio, la rama `main` y el archivo `app.py`.
-3. En **Advanced settings**, elegir una versión de Python para la que exista scikit-learn 1.9.1.
-
-El modelo guardado sólo se carga con esa misma versión de scikit-learn.
-
-## Integrantes
-
-Grupo 9 · Comisión 5K09 · Ciencia de Datos · Ingeniería en Sistemas de Información · UTN Facultad Regional Mendoza
-
-- Facundo Bengoa
-- Facundo Costella
-- Diego Daza
-- Lucas García
-- Juan Manuel Sosa
