@@ -4,11 +4,11 @@ Proyecto Integrador · Ciencia de Datos · UTN FRM · 2026 · Grupo 9 (Comisión
 
 **Pregunta:** ¿Qué características de un sismo permiten estimar si está asociado a un tsunami?
 
-**Respuesta corta:** con la magnitud y el lugar del sismo se anticipa el 92 % de los eventos que la USGS marca con alerta de tsunami, y el lugar pesa tanto como la magnitud.
+**Respuesta corta:** con nuestros datos la pregunta no se puede responder tal como la planteamos, porque el catálogo de la USGS no registra qué sismos generaron un tsunami: la columna `tsunami` es la alerta que la USGS emite cuando un sismo cumple su criterio. Lo más cerca que se llega es estimar qué sismos reciben esa alerta, y eso se logra con la magnitud y el lugar del sismo: el modelo detecta el 92 % de los sismos con marca del test, y el lugar pesa tanto como la magnitud.
 
 **Aplicación:** https://integradortsunamis-grupo09.streamlit.app/
 
-![Portada de la aplicación: la pregunta, de qué se trata el proyecto y qué significa la marca de la USGS](docs/img/portada.png)
+![Portada de la aplicación: la pregunta, los tres números del test y la aclaración de qué significa la marca de la USGS](docs/img/portada.png)
 
 > **Ojo con la etiqueta.** `tsunami = 1` no dice si hubo una ola: es la marca que pone la USGS cuando el evento cumple su criterio de alerta, que depende de la magnitud y de la región. Lo que el modelo aprende es **qué sismos marca la USGS**, una buena aproximación a «sismos con potencial de tsunami».
 
@@ -18,7 +18,7 @@ La app presenta los datos con la estructura de **copa de martini** (Segel y Heer
 
 | Parte | Secciones de la app | Quién decide | Qué hace |
 |---|---|---|---|
-| Base | Portada | La app | Plantea la pregunta y la responde, muestra tres números del test (F1, sismos con marca detectados y falsas alarmas), cuenta de qué se trata el proyecto y aclara qué significa la marca de la USGS |
+| Base | Portada | La app | Plantea la pregunta y la responde, muestra tres números del test (F1, sismos con marca detectados y falsas alarmas), aclara justo debajo qué significa la marca de la USGS y cuenta de qué se trata el proyecto |
 | Tallo | Los datos · Lo que encontramos · El modelo | La app | Cuenta la historia en orden. Cada título afirma algo, un gráfico lo prueba y el desplegable «Cómo lo sabemos» tiene el detalle técnico |
 | Copa | Explorá · Probá el modelo | El lector | Comprueba la historia con sus propios filtros y casos |
 
