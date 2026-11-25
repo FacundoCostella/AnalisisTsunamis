@@ -27,7 +27,7 @@ La app presenta los datos con la estructura de **copa de martini** (Segel y Heer
 1. **Leé el tallo de arriba hacia abajo.** Los títulos solos cuentan la historia; si querés saber de dónde sale cada afirmación, abrí «Cómo lo sabemos». Todo el tallo se lee sin tocar nada: en «Los datos», cuántos sismos tienen la marca, las variables con las que trabajamos, por qué la validación del modelo se arma por grupos y las columnas que no se usan; en «Lo que encontramos», cómo cambia la marca con la magnitud y qué variables separan a los sismos con marca; en «El modelo», qué dio, en qué se apoya y las conclusiones.
 2. **En «Explorá»**, cada punto es un sismo en un gráfico de magnitud contra profundidad, probabilidad del modelo o distancia a la costa (se elige el eje), coloreado según lo que dijo el modelo: acierto con marca, falso negativo, falsa alarma, acierto sin marca o sin marca cargada. Elegí qué inspeccionar (aciertos con marca y errores, sólo aciertos con marca, sólo errores, sismos sin marca cargada o todos), filtrá por magnitud, región y mar o tierra, y hacé clic en un punto: a la derecha aparece su ficha y su ubicación en el mapa, con un botón para cargarlo en «Probá el modelo». Cada sismo lo predice un modelo que no lo vio.
 
-   ![Sección «Explorá»: el mapa de sismos coloreado según lo que dijo el modelo](docs/img/explora.png)
+   ![Sección «Explorá»: el mapa de sismos coloreado según lo que dijo el modelo]
 
 3. **En «Probá el modelo»**, los controles están a la izquierda y el mapa a la derecha. Partí de un sismo real (el menú carga sus valores), hacé clic en una zona del mapa para acercarte y mover tu sismo ahí, o armá uno con magnitud, profundidad, latitud, longitud y mar o tierra, y mirá qué probabilidad le da el modelo de que la USGS lo marque. Hay alerta si la probabilidad es 0,27 o más. El tipo de magnitud está en «Opciones avanzadas», y otro desplegable explica qué significa cada sigla.
 
@@ -165,4 +165,3 @@ Grupo 9 · Comisión 5K09 · Ciencia de Datos · Ingeniería en Sistemas de Info
 - Diego Daza
 - Lucas García
 - Juan Manuel Sosa
-- Porteros Yadhira
